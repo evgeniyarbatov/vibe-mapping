@@ -41,7 +41,7 @@ circle:
 	$(RADIUS_KM) \
 	$(CIRCLE);
 
-area:
+area: circle
 	@osmconvert $(OSM_DIR)/$(COUNTRY_OSM_FILE) -B=$(CIRCLE) -o=$(OSM_DIR)/foot/area.osm.pbf
 	@osmconvert $(OSM_DIR)/$(COUNTRY_OSM_FILE) -B=$(CIRCLE) -o=$(OSM_DIR)/bicycle/area.osm.pbf
 	@osmium cat --overwrite $(OSM_DIR)/foot/area.osm.pbf -o $(OSM_DIR)/area.osm
@@ -53,12 +53,12 @@ points:
 	$(OSM_DIR)/area.osm \
 	$(POINTS);
 
-points-normalized:
+points-normalized: points
 	@$(PYTHON) scripts/normalize-area-points.py \
 	$(POINTS) \
 	$(POINTS_NORMALIZED);
 
-area-cells:
+area-cells: points-normalized
 	@$(PYTHON) scripts/build-area-cells.py \
 	--resolution $(H3_RESOLUTION) \
 	$(POINTS_NORMALIZED) \
