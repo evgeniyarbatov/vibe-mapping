@@ -10,7 +10,7 @@ What is the vibe of a place based on OSM map? Experiment to understand subjectiv
 Use `make points-normalized` to run it.
 
 `scripts/build-area-cells.py` reads `osm/area-points-normalized.csv`, assigns each feature to an H3 cell, aggregates per-cell features, computes vibe scores, and writes:
-`data/area-cells.csv` with columns `cell_id`, `cell_features`, `scores`, `cell_boundary`.
+`osm/area-cells.csv` with columns `cell_id`, `cell_features`, `scores`, `cell_boundary`.
 Use `make area-cells` to run it.
 
 `scripts/build-area-vibe.py` reads `osm/area-cells.csv`, calls local Ollama (`mistral-nemo` by default), and writes:
@@ -18,7 +18,7 @@ Use `make area-cells` to run it.
 `vibe` is a descriptive pedestrian-feeling summary, and `label` is one of `positive`, `mixed`, `negative`.
 Use `make area-vibe` to run it.
 
-`scripts/build-area-vibe-kml.py` reads `osm/area-vibe.csv` and writes:
-`osm/area-vibe.kml` with area polygons and label points for each area, color-coded by `label`:
+`scripts/build-area-vibe-kml.py` reads `osm/area-vibe.csv` and enriches each cell from `osm/area-cells.csv`, then writes:
+`osm/area-vibe.kml` with area polygons color-coded by `label` and per-cell descriptions including pretty-printed `cell_features` and `scores`:
 `positive` (green), `mixed` (yellow), `negative` (red).
 Use `make area-vibe-kml` to run it.

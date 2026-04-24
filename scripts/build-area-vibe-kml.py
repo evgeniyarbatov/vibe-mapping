@@ -7,6 +7,8 @@ from xml.etree import ElementTree as ET
 
 KML_NS = "http://www.opengis.net/kml/2.2"
 REQUIRED_COLUMNS = {"cell_id", "cell_boundary", "vibe", "label"}
+AREA_CELLS_REQUIRED_COLUMNS = {"cell_id", "cell_features", "scores"}
+DEFAULT_AREA_CELLS_CSV = "osm/area-cells.csv"
 VALID_LABELS = {"positive", "mixed", "negative"}
 
 LABEL_COLORS = {
@@ -38,6 +40,16 @@ def rgb_to_kml_color(rgb_hex, alpha):
     green = rgb[2:4]
     blue = rgb[4:6]
     return f"{alpha}{blue}{green}{red}"
+
+
+def parse_json_object(cell_id, column_name, raw_value):
+    try:
+        payload = json.loads(raw_value)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Cell {cell_id}: invalid JSON in {column_name}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"Cell {cell_id}: expected JSON object in {column_name}")
+    return payload
 
 
 def normalize_position(cell_id, position):
@@ -102,57 +114,6 @@ def parse_polygons(cell_id, raw_boundary):
     return polygons
 
 
-def ring_signed_area(ring):
-    area = 0.0
-    for (x1, y1), (x2, y2) in zip(ring, ring[1:]):
-        area += x1 * y2 - x2 * y1
-    return area * 0.5
-
-
-def ring_centroid(ring):
-    signed_area = ring_signed_area(ring)
-    if abs(signed_area) < 1e-12:
-        lon = sum(point[0] for point in ring) / len(ring)
-        lat = sum(point[1] for point in ring) / len(ring)
-        return lon, lat
-
-    factor = 1.0 / (6.0 * signed_area)
-    cx = 0.0
-    cy = 0.0
-    for (x1, y1), (x2, y2) in zip(ring, ring[1:]):
-        cross = x1 * y2 - x2 * y1
-        cx += (x1 + x2) * cross
-        cy += (y1 + y2) * cross
-    return cx * factor, cy * factor
-
-
-def polygon_centroid(polygons):
-    weighted_lon = 0.0
-    weighted_lat = 0.0
-    total_weight = 0.0
-    all_points = []
-
-    for polygon in polygons:
-        outer = polygon["outer"]
-        all_points.extend(outer)
-
-        area = abs(ring_signed_area(outer))
-        lon, lat = ring_centroid(outer)
-        if area > 1e-12:
-            weighted_lon += lon * area
-            weighted_lat += lat * area
-            total_weight += area
-
-    if total_weight > 1e-12:
-        return weighted_lon / total_weight, weighted_lat / total_weight
-
-    if not all_points:
-        return 0.0, 0.0
-    lon = sum(point[0] for point in all_points) / len(all_points)
-    lat = sum(point[1] for point in all_points) / len(all_points)
-    return lon, lat
-
-
 def format_coords(ring):
     return " ".join(f"{lon:.8f},{lat:.8f},0" for lon, lat in ring)
 
@@ -171,7 +132,25 @@ def add_polygon(parent, polygon):
         ET.SubElement(inner_ring, f"{{{KML_NS}}}coordinates").text = format_coords(inner)
 
 
-def read_area_vibe_rows(input_csv_path):
+def read_area_cells_details(area_cells_csv_path):
+    with open(area_cells_csv_path, newline="", encoding="utf-8") as source:
+        reader = csv.DictReader(source)
+        missing = AREA_CELLS_REQUIRED_COLUMNS.difference(set(reader.fieldnames or []))
+        if missing:
+            missing_list = ", ".join(sorted(missing))
+            raise ValueError(f"Missing required columns in area cells CSV: {missing_list}")
+
+        details = {}
+        for row in reader:
+            cell_id = row["cell_id"]
+            details[cell_id] = {
+                "cell_features": parse_json_object(cell_id, "cell_features", row["cell_features"]),
+                "scores": parse_json_object(cell_id, "scores", row["scores"]),
+            }
+    return details
+
+
+def read_area_vibe_rows(input_csv_path, cell_details):
     rows = []
     with open(input_csv_path, newline="", encoding="utf-8") as source:
         reader = csv.DictReader(source)
@@ -185,14 +164,15 @@ def read_area_vibe_rows(input_csv_path):
             vibe = sanitize_vibe(row["vibe"])
             label = normalize_label(row.get("label"))
             polygons = parse_polygons(cell_id, row["cell_boundary"])
-            centroid_lon, centroid_lat = polygon_centroid(polygons)
+            details = cell_details.get(cell_id, {"cell_features": {}, "scores": {}})
             rows.append(
                 {
                     "cell_id": cell_id,
                     "vibe": vibe,
                     "label": label,
                     "polygons": polygons,
-                    "centroid": (centroid_lon, centroid_lat),
+                    "cell_features": details["cell_features"],
+                    "scores": details["scores"],
                 }
             )
     return rows
@@ -207,10 +187,8 @@ def build_label_styles(rows):
         rgb = LABEL_COLORS[label]
         styles[label] = {
             "area_style_id": f"area-label-{label}",
-            "label_style_id": f"label-label-{label}",
             "line_color": rgb_to_kml_color(rgb, "ff"),
             "fill_color": rgb_to_kml_color(rgb, "88"),
-            "label_color": rgb_to_kml_color(rgb, "ff"),
         }
     return styles
 
@@ -226,20 +204,23 @@ def add_styles(document, styles):
         ET.SubElement(poly_style, f"{{{KML_NS}}}fill").text = "1"
         ET.SubElement(poly_style, f"{{{KML_NS}}}outline").text = "1"
 
-        label_style = ET.SubElement(document, f"{{{KML_NS}}}Style", id=style["label_style_id"])
-        labels = ET.SubElement(label_style, f"{{{KML_NS}}}LabelStyle")
-        ET.SubElement(labels, f"{{{KML_NS}}}color").text = style["label_color"]
-        ET.SubElement(labels, f"{{{KML_NS}}}scale").text = "1.0"
-        icons = ET.SubElement(label_style, f"{{{KML_NS}}}IconStyle")
-        ET.SubElement(icons, f"{{{KML_NS}}}scale").text = "0.0"
+
+def build_description(row):
+    cell_features = json.dumps(row["cell_features"], indent=2, sort_keys=True)
+    scores = json.dumps(row["scores"], indent=2, sort_keys=True)
+    return (
+        f"Area {row['cell_id']}\n"
+        f"Vibe: {row['vibe']}\n"
+        f"Label: {row['label']}\n\n"
+        f"Cell Features:\n{cell_features}\n\n"
+        f"Scores:\n{scores}"
+    )
 
 
 def add_area_placemark(document, row, style):
     area = ET.SubElement(document, f"{{{KML_NS}}}Placemark")
     ET.SubElement(area, f"{{{KML_NS}}}name").text = f"{row['vibe']} ({row['cell_id']})"
-    ET.SubElement(area, f"{{{KML_NS}}}description").text = (
-        f"Area {row['cell_id']} | vibe: {row['vibe']} | label: {row['label']}"
-    )
+    ET.SubElement(area, f"{{{KML_NS}}}description").text = build_description(row)
     ET.SubElement(area, f"{{{KML_NS}}}styleUrl").text = f"#{style['area_style_id']}"
 
     polygons = row["polygons"]
@@ -252,21 +233,9 @@ def add_area_placemark(document, row, style):
         add_polygon(multi_geometry, polygon)
 
 
-def add_label_placemark(document, row, style):
-    label = ET.SubElement(document, f"{{{KML_NS}}}Placemark")
-    ET.SubElement(label, f"{{{KML_NS}}}name").text = row["vibe"]
-    ET.SubElement(label, f"{{{KML_NS}}}description").text = (
-        f"Label for area {row['cell_id']} | label: {row['label']}"
-    )
-    ET.SubElement(label, f"{{{KML_NS}}}styleUrl").text = f"#{style['label_style_id']}"
-
-    point = ET.SubElement(label, f"{{{KML_NS}}}Point")
-    centroid_lon, centroid_lat = row["centroid"]
-    ET.SubElement(point, f"{{{KML_NS}}}coordinates").text = f"{centroid_lon:.8f},{centroid_lat:.8f},0"
-
-
-def build_area_vibe_kml(input_csv_path, output_kml_path):
-    rows = read_area_vibe_rows(input_csv_path)
+def build_area_vibe_kml(input_csv_path, output_kml_path, area_cells_csv_path=DEFAULT_AREA_CELLS_CSV):
+    cell_details = read_area_cells_details(area_cells_csv_path)
+    rows = read_area_vibe_rows(input_csv_path, cell_details)
     styles = build_label_styles(rows)
 
     output_path = Path(output_kml_path)
@@ -281,7 +250,6 @@ def build_area_vibe_kml(input_csv_path, output_kml_path):
     for row in rows:
         style = styles[row["label"]]
         add_area_placemark(document, row, style)
-        add_label_placemark(document, row, style)
 
     tree = ET.ElementTree(root)
     try:
@@ -295,9 +263,14 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_csv", help="Input CSV with columns: cell_id, cell_boundary, vibe, label")
     parser.add_argument("output_kml", help="Output KML path")
+    parser.add_argument(
+        "--area-cells-csv",
+        default=DEFAULT_AREA_CELLS_CSV,
+        help=f"Area cells CSV with cell_features and scores (default: {DEFAULT_AREA_CELLS_CSV})",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    build_area_vibe_kml(args.input_csv, args.output_kml)
+    build_area_vibe_kml(args.input_csv, args.output_kml, args.area_cells_csv)
