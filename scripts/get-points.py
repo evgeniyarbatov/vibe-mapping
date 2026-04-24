@@ -1,9 +1,25 @@
+import json
 import sys
+
 import osmium
 import pandas as pd
-from haversine import haversine
 
 # --- WIKIPEDIA EXTRACTION ---
+
+
+REQUESTED_TAG_KEYS = (
+    "amenity",
+    "shop",
+    "tourism",
+    "leisure",
+    "natural",
+    "landuse",
+    "building",
+    "highway",
+    "water",
+    "historic",
+    "cultural",
+)
 
 
 def get_wikipedia_url(tags):
@@ -23,6 +39,86 @@ def get_wikipedia_url(tags):
     return None
 
 
+def tags_to_dict(tags):
+    tag_map = {}
+    if hasattr(tags, "items"):
+        for key, value in tags.items():
+            tag_map[str(key)] = str(value)
+        return tag_map
+
+    for tag in tags:
+        tag_map[str(tag.k)] = str(tag.v)
+    return tag_map
+
+
+def is_temple(tags):
+    return (
+        tags.get("landuse") == "religious"
+        or tags.get("building") == "temple"
+        or tags.get("amenity") in {"place_of_worship"}
+        or tags.get("religion") is not None
+    )
+
+
+def is_park(tags):
+    return (
+        tags.get("leisure") in {"park", "garden", "nature_reserve"}
+        or tags.get("landuse") in {"recreation_ground", "grass"}
+        or tags.get("boundary") == "national_park"
+    )
+
+
+def is_lake(tags):
+    return tags.get("water") in {"lake", "pond", "reservoir"} or (
+        tags.get("natural") == "water" and tags.get("water") in {"lake", "pond", "reservoir"}
+    )
+
+
+def is_tourist_attraction(tags):
+    return tags.get("tourism") == "attraction"
+
+
+def is_cultural_site(tags):
+    return (
+        tags.get("tourism")
+        in {"museum", "gallery", "artwork", "attraction", "viewpoint", "information"}
+        or tags.get("historic") in {"monument", "memorial", "archaeological_site", "castle", "ruins"}
+        or tags.get("amenity") in {"theatre", "arts_centre", "cinema"}
+        or tags.get("cultural") is not None
+    )
+
+
+def has_requested_category_tag(tags):
+    return any(tags.get(key) is not None for key in REQUESTED_TAG_KEYS)
+
+
+def is_interesting_tag(tags):
+    return (
+        has_requested_category_tag(tags)
+        or is_temple(tags)
+        or is_park(tags)
+        or is_lake(tags)
+        or is_tourist_attraction(tags)
+        or is_cultural_site(tags)
+    )
+
+
+def get_name(tags):
+    return tags.get("name:en", tags.get("name", "Unknown"))
+
+
+def geometry_to_geojson(way_nodes):
+    coordinates = [[float(lon), float(lat)] for lat, lon in way_nodes]
+    is_polygon = len(coordinates) >= 4 and coordinates[0] == coordinates[-1]
+
+    if is_polygon:
+        geometry = {"type": "Polygon", "coordinates": [coordinates]}
+    else:
+        geometry = {"type": "LineString", "coordinates": coordinates}
+
+    return json.dumps(geometry, separators=(",", ":"))
+
+
 # --- OSM HANDLER ---
 
 
@@ -31,69 +127,9 @@ class WayHandler(osmium.SimpleHandler):
         osmium.SimpleHandler.__init__(self)
         self.ways = []
 
-    # --- CATEGORY CHECKS ---
-
-    def is_temple(self, tags):
-        return (
-            tags.get("landuse") == "religious"
-            or tags.get("building") == "temple"
-            or tags.get("amenity") in {"place_of_worship"}
-            or tags.get("religion") is not None
-        )
-
-    def is_park(self, tags):
-        return (
-            tags.get("leisure") in {"park", "garden", "nature_reserve"}
-            or tags.get("landuse") in {"recreation_ground", "grass"}
-            or tags.get("boundary") == "national_park"
-        )
-
-    def is_lake(self, tags):
-        return tags.get("water") in {"lake", "pond", "reservoir"} or (
-            tags.get("natural") == "water"
-            and tags.get("water") in {"lake", "pond", "reservoir"}
-        )
-
-    def is_tourist_attraction(self, tags):
-        return tags.get("tourism") == "attraction"
-
-    def is_museum(self, tags):
-        return tags.get("tourism") == "museum"
-
-    def is_cultural_site(self, tags):
-        return (
-            tags.get("tourism")
-            in {
-                "museum",
-                "gallery",
-                "artwork",
-                "attraction",
-                "viewpoint",
-                "information",
-            }
-            or tags.get("historic")
-            in {"monument", "memorial", "archaeological_site", "castle", "ruins"}
-            or tags.get("amenity") in {"theatre", "arts_centre", "cinema"}
-        )
-
-    def is_interesting_tag(self, tags):
-        return (
-            self.is_temple(tags)
-            or self.is_park(tags)
-            or self.is_lake(tags)
-            or self.is_tourist_attraction(tags)
-            or self.is_cultural_site(tags)
-        )
-
-    # --- HELPERS ---
-
-    def get_name(self, tags):
-        return tags.get("name:en", tags.get("name", "Unknown"))
-
-    # --- MAIN WAY PROCESSING ---
-
     def way(self, w):
-        if not self.is_interesting_tag(w.tags):
+        tag_map = tags_to_dict(w.tags)
+        if not is_interesting_tag(tag_map):
             return
 
         way_nodes = []
@@ -103,42 +139,41 @@ class WayHandler(osmium.SimpleHandler):
             except Exception:
                 continue
 
-        if not way_nodes:
+        if len(way_nodes) < 2:
             return
 
-        name = self.get_name(w.tags)
-        wiki_url = get_wikipedia_url(w.tags)
-        self.ways.append([name, way_nodes, wiki_url])
+        name = get_name(tag_map)
+        wiki_url = get_wikipedia_url(tag_map)
+        category_values = {key: tag_map.get(key, "") for key in REQUESTED_TAG_KEYS}
+        self.ways.append([name, way_nodes, wiki_url, category_values])
 
 
 # --- UTILITIES ---
 
 
-def get_point(start, way_border):
-    distances = [haversine(start, (float(lat), float(lon))) for lat, lon in way_border]
-    min_dist_index = distances.index(min(distances))
-    return way_border[min_dist_index]
-
-
-def write_csv(start_lat, start_lon, ways, filename):
-    df = pd.DataFrame(ways, columns=["name", "way_border", "wikipedia_url"])
+def write_csv(ways, filename):
+    df = pd.DataFrame(ways, columns=["name", "way_nodes", "wikipedia_url", "category_values"])
     df = df[df["name"] != "Unknown"]
     df = df.drop_duplicates(subset="name", keep=False)
 
-    df["way_border"] = df["way_border"].apply(
-        lambda x: [(float(lat), float(lon)) for lat, lon in x]
-    )
-    df[["lat", "lon"]] = df["way_border"].apply(
-        lambda way: pd.Series(get_point((float(start_lat), float(start_lon)), way))
-    )
+    output_columns = ["name", "geometry", "wikipedia_url", *REQUESTED_TAG_KEYS]
+    if df.empty:
+        pd.DataFrame(columns=output_columns).to_csv(filename, index=False)
+        return
 
-    df[["name", "lat", "lon", "wikipedia_url"]].to_csv(filename, index=False)
+    df["geometry"] = df["way_nodes"].apply(geometry_to_geojson)
+    for key in REQUESTED_TAG_KEYS:
+        df[key] = df["category_values"].apply(lambda values: values.get(key, ""))
+
+    df[output_columns].to_csv(filename, index=False)
 
 
 def main(start_lat, start_lon, osm_file, filename):
+    del start_lat
+    del start_lon
     handler = WayHandler()
     handler.apply_file(osm_file, locations=True)
-    write_csv(start_lat, start_lon, handler.ways, filename)
+    write_csv(handler.ways, filename)
 
 
 if __name__ == "__main__":

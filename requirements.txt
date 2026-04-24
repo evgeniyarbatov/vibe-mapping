@@ -1,4 +1,3 @@
 geopy
 osmium
 pandas
-haversine
