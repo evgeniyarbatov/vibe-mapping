@@ -7,7 +7,7 @@ REQUIREMENTS := requirements.txt
 OSM_URL = https://download.geofabrik.de/asia/vietnam-latest.osm.pbf
 COUNTRY_OSM_FILE = $$(basename $(OSM_URL))
 
-RADIUS_KM = 30
+RADIUS_KM = 10
 H3_RESOLUTION = 7
 
 # Hai Tien
