@@ -33,3 +33,8 @@ circle:
 	$(START_LON) \
 	$(RADIUS_KM) \
 	$(CIRCLE);
+
+area:
+	@osmconvert $(OSM_DIR)/$(COUNTRY_OSM_FILE) -B=$(CIRCLE) -o=$(OSM_DIR)/foot/area.osm.pbf
+	@osmconvert $(OSM_DIR)/$(COUNTRY_OSM_FILE) -B=$(CIRCLE) -o=$(OSM_DIR)/bicycle/area.osm.pbf
+	@osmium cat --overwrite $(OSM_DIR)/foot/area.osm.pbf -o $(OSM_DIR)/area.osm
