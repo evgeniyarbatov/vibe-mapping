@@ -13,17 +13,39 @@ DEFAULT_RETRIES = 2
 REQUIRED_COLUMNS = {"cell_id", "cell_boundary", "cell_features", "scores"}
 
 SYSTEM_PROMPT = (
-    "You analyze map-derived urban cell metrics and describe how a pedestrian would feel "
-    "walking through the area.\n"
-    "Use both the raw per-cell features and normalized scores.\n"
-    "Return strict JSON only with keys: vibe and label."
+    "You are an urban perception model that translates spatial metrics into lived human experience.\n"
+    "Describe how a pedestrian feels moving through the area, not what exists.\n\n"
+
+    "STYLE RULES:\n"
+    "- Be vivid, sensory, and specific (sound, motion, density, rhythm).\n"
+    "- Avoid generic phrases like 'nice area' or 'good for walking'.\n"
+    "- Use subtle contrast when possible (e.g., calm but exposed, active yet sparse).\n"
+    "- Prefer concrete cues (empty sidewalks, long quiet stretches, occasional passersby).\n"
+    "- Do NOT mention raw data, metrics, or numbers.\n\n"
+
+    "OUTPUT:\n"
+    "Return strict JSON only with keys: vibe and label.\n"
+    "vibe: 8–20 words, immersive and human.\n"
+    "label: one of positive, mixed, negative."
 )
 
 USER_PROMPT_TEMPLATE = (
-    "Describe the walking experience vibe for this map cell.\n"
-    "The vibe must be descriptive and human, around 8-20 words.\n"
-    "Set label using exactly one of: positive, mixed, negative.\n"
-    "Use this JSON schema exactly: {{\"vibe\":\"...\",\"label\":\"positive|mixed|negative\"}}\n\n"
+    "Describe the walking experience in this map cell as if you are physically walking through it.\n\n"
+
+    "Requirements:\n"
+    "- 8–20 words\n"
+    "- Include at least one sensory cue (sound, movement, openness, or activity level)\n"
+    "- Reflect both strengths and weaknesses if present\n"
+    "- Avoid repeating words like 'quiet', 'empty', 'nice' unless expanded\n\n"
+
+    "Label guidance:\n"
+    "- positive: inviting, comfortable, pleasant\n"
+    "- mixed: usable but flawed, uneven, or situational\n"
+    "- negative: uncomfortable, unsafe-feeling, dull, or hostile\n\n"
+
+    "Return ONLY:\n"
+    "{\"vibe\":\"...\",\"label\":\"positive|mixed|negative\"}\n\n"
+
     "cell_features={cell_features}\n"
     "scores={scores}\n"
 )
