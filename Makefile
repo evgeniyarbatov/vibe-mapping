@@ -50,9 +50,10 @@ circle:
 	$(CIRCLE);
 
 area: circle
-	@osmium cat --overwrite $(OSM_DIR)/foot/area.osm.pbf -o $(OSM_DIR)/area.osm
+	@osmconvert $(OSM_DIR)/$(COUNTRY_OSM_FILE) -B=$(CIRCLE) -o=$(OSM_DIR)/area.osm.pbf
+	@osmium cat --overwrite $(OSM_DIR)/area.osm.pbf -o $(OSM_DIR)/area.osm
 
-points:
+points: area
 	@$(PYTHON) scripts/get-points.py \
 	$(START_LAT) \
 	$(START_LON) \
