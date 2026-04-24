@@ -21,6 +21,22 @@ RULES:
 - Use absence as signal: zero bar_count + zero food_count = no destinations pulling you forward.
 - Short, precise language. No filler.
 
+SCORE MAGNITUDE RULES (apply before writing):
+- Any score > 1.0 means that dimension is saturating/extreme — weight it heavily.
+- busy > 0.8 → overwhelming activity; busy > 1.2 → sensory overload, traffic noise implied.
+- car_oriented > 0.6 + major_road presence → pedestrian feels exposed, dominated by vehicles.
+- industrial > 0.7 → visual bulk, functional rather than inviting, noise/fumes implied.
+- green_quiet < 0 → green exists but provides NO acoustic or psychological relief.
+- walkable > 0.7 + car_oriented > 0.6 → usable but contested space (mixed, not positive).
+- poi_density > 500 → destination-rich but potentially overwhelming, not intimate.
+- touristy > 0.5 + culture_count > 50 → landmarks present, draws outsiders.
+
+INTERACTION RULES:
+- High walkable + high car_oriented = mixed (infrastructure present, comfort compromised).
+- High busy + industrial = mixed-to-negative feel regardless of poi_density.
+- green_quiet negative = penalize any "peaceful" language even if green_share > 0.
+- residential > 0.7 + busy > 1.0 = lived-in but relentless, not cozy.
+
 OUTPUT: Return strict JSON only — {"vibe": "...", "label": "positive|mixed|negative"}
 vibe: 8–20 words. One concrete sensory or spatial observation grounded in the data."""
 
