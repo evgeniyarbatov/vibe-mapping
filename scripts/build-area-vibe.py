@@ -12,43 +12,37 @@ DEFAULT_RETRIES = 2
 
 REQUIRED_COLUMNS = {"cell_id", "cell_boundary", "cell_features", "scores"}
 
-SYSTEM_PROMPT = (
-    "You are an urban perception model that translates spatial metrics into lived human experience.\n"
-    "Describe how a pedestrian feels moving through the area, not what exists.\n\n"
+SYSTEM_PROMPT = """You are an urban data interpreter that generates grounded walking experience descriptions.
 
-    "STYLE RULES:\n"
-    "- Be vivid, sensory, and specific (sound, motion, density, rhythm).\n"
-    "- Avoid generic phrases like 'nice area' or 'good for walking'.\n"
-    "- Use subtle contrast when possible (e.g., calm but exposed, active yet sparse).\n"
-    "- Prefer concrete cues (empty sidewalks, long quiet stretches, occasional passersby).\n"
-    "- Do NOT mention raw data, metrics, or numbers.\n\n"
+RULES:
+- Every claim in your vibe must be traceable to a provided feature or score.
+- Do NOT invent details absent from the data (no imagined sounds, crowds, or smells unless a feature supports them).
+- Translate scores into felt experience: high walkable → feet feel purposeful; zero green_share → no relief from hard surfaces.
+- Use absence as signal: zero bar_count + zero food_count = no destinations pulling you forward.
+- Short, precise language. No filler.
 
-    "OUTPUT:\n"
-    "Return strict JSON only with keys: vibe and label.\n"
-    "vibe: 8–20 words, immersive and human.\n"
-    "label: one of positive, mixed, negative."
-)
+OUTPUT: Return strict JSON only — {"vibe": "...", "label": "positive|mixed|negative"}
+vibe: 8–20 words. One concrete sensory or spatial observation grounded in the data."""
 
-USER_PROMPT_TEMPLATE = (
-    "Describe the walking experience in this map cell as if you are physically walking through it.\n\n"
+USER_PROMPT_TEMPLATE = """Generate a walking vibe description grounded ONLY in the data below.
 
-    "Requirements:\n"
-    "- 8–20 words\n"
-    "- Include at least one sensory cue (sound, movement, openness, or activity level)\n"
-    "- Reflect both strengths and weaknesses if present\n"
-    "- Avoid repeating words like 'quiet', 'empty', 'nice' unless expanded\n\n"
+FEATURE INTERPRETATION GUIDE:
+- footway_length_m / road_length_m ratio → dedicated walking infrastructure vs shared road space
+- poi_density / poi_total → how much there is to encounter per step
+- green_share → visual relief, softness, shade
+- building_coverage → enclosure, shelter, urban density
+- car_orientation score → exposure to traffic, hostile or neutral
+- walkable score → overall pedestrian comfort signal
+- nightlife / foodie / touristy scores → activation, destination-pull
+- residential score → neighborhood warmth vs anonymity
+- diversity score → mixed-use texture vs mono-function
 
-    "Label guidance:\n"
-    "- positive: inviting, comfortable, pleasant\n"
-    "- mixed: usable but flawed, uneven, or situational\n"
-    "- negative: uncomfortable, unsafe-feeling, dull, or hostile\n\n"
+REQUIRED: Base every descriptive word on a feature above. If a feature is zero or near-zero, treat it as absence — do not invent what isn't there.
 
-    "Return ONLY:\n"
-    "{{\"vibe\":\"...\",\"label\":\"positive|mixed|negative\"}}\n\n"
+cell_features={cell_features}
+scores={scores}
 
-    "cell_features={cell_features}\n"
-    "scores={scores}\n"
-)
+Return ONLY: {{"vibe":"...","label":"positive|mixed|negative"}}"""
 
 VALID_LABELS = {"positive", "mixed", "negative"}
 
