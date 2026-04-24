@@ -8,7 +8,7 @@ OSM_URL = https://download.geofabrik.de/asia/vietnam-latest.osm.pbf
 COUNTRY_OSM_FILE = $$(basename $(OSM_URL))
 
 RADIUS_KM = 30
-H3_RESOLUTION = 8
+H3_RESOLUTION = 7
 
 START_LAT = 19.843303820107394
 START_LON = 105.93544337695647
