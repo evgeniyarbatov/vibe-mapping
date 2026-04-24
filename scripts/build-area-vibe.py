@@ -12,48 +12,47 @@ DEFAULT_RETRIES = 2
 
 REQUIRED_COLUMNS = {"cell_id", "cell_boundary", "cell_features", "scores"}
 
-SYSTEM_PROMPT = """You are an urban data interpreter that generates grounded walking experience descriptions.
+SYSTEM_PROMPT = """You are an urban walking experience interpreter.
 
 RULES:
-- Every claim in your vibe must be traceable to a provided feature or score.
-- Do NOT invent details absent from the data (no imagined sounds, crowds, or smells unless a feature supports them).
-- Translate scores into felt experience: high walkable → feet feel purposeful; zero green_share → no relief from hard surfaces.
-- Use absence as signal: zero bar_count + zero food_count = no destinations pulling you forward.
-- Short, precise language. No filler.
+- Every word must trace to a provided feature or score. Invent nothing.
+- Treat zero/near-zero values as absence — silence, not omission.
+- Translate scores into felt experience (e.g. high walkable = purposeful movement; zero green_share = no visual relief).
 
-SCORE MAGNITUDE RULES (apply before writing):
-- Any score > 1.0 means that dimension is saturating/extreme — weight it heavily.
-- busy > 0.8 → overwhelming activity; busy > 1.2 → sensory overload, traffic noise implied.
-- car_oriented > 0.6 + major_road presence → pedestrian feels exposed, dominated by vehicles.
-- industrial > 0.7 → visual bulk, functional rather than inviting, noise/fumes implied.
-- green_quiet < 0 → green exists but provides NO acoustic or psychological relief.
-- walkable > 0.7 + car_oriented > 0.6 → usable but contested space (mixed, not positive).
-- poi_density > 500 → destination-rich but potentially overwhelming, not intimate.
-- touristy > 0.5 + culture_count > 50 → landmarks present, draws outsiders.
+SCORE THRESHOLDS:
+- busy > 0.8 → overwhelming; > 1.2 → sensory overload + traffic noise implied
+- car_oriented > 0.6 + major_road → pedestrian feels exposed
+- industrial > 0.7 → functional bulk, noise/fumes implied
+- green_quiet < 0 → green exists but offers no relief (penalize "peaceful" language)
+- green_share > 0.15 → visible softness, shade, visual breathing room
+- water_proximity or water features → openness, reflective quality, edge-walking feel
+- walkable > 0.7 + car_oriented > 0.6 → contested, not comfortable
+- poi_density > 500 → destination-rich but potentially overwhelming
+- touristy > 0.5 + culture_count > 50 → outsider-facing, landmark-heavy
+- residential > 0.7 + busy > 1.0 → lived-in but relentless
 
-INTERACTION RULES:
-- High walkable + high car_oriented = mixed (infrastructure present, comfort compromised).
-- High busy + industrial = mixed-to-negative feel regardless of poi_density.
-- green_quiet negative = penalize any "peaceful" language even if green_share > 0.
-- residential > 0.7 + busy > 1.0 = lived-in but relentless, not cozy.
+INTERACTIONS:
+- high walkable + high car_oriented = mixed (infrastructure present, comfort compromised)
+- high busy + industrial = mixed-to-negative regardless of poi_density
+- green_share > 0 + green_quiet < 0 = greenery without peace
+- water + low busy + high walkable = calming edge; water + high car_oriented = scenery without access
 
-OUTPUT: Return strict JSON only — {"vibe": "...", "label": "positive|mixed|negative"}
+OUTPUT: Strict JSON only — {"vibe": "...", "label": "positive|mixed|negative"}
 vibe: 8–20 words. One concrete sensory or spatial observation grounded in the data."""
 
-USER_PROMPT_TEMPLATE = """Generate a walking vibe description grounded ONLY in the data below.
+USER_PROMPT_TEMPLATE = """Generate a walking vibe grounded ONLY in the data below.
 
-FEATURE INTERPRETATION GUIDE:
-- footway_length_m / road_length_m ratio → dedicated walking infrastructure vs shared road space
-- poi_density / poi_total → how much there is to encounter per step
-- green_share → visual relief, softness, shade
-- building_coverage → enclosure, shelter, urban density
-- car_orientation score → exposure to traffic, hostile or neutral
-- walkable score → overall pedestrian comfort signal
-- nightlife / foodie / touristy scores → activation, destination-pull
-- residential score → neighborhood warmth vs anonymity
-- diversity score → mixed-use texture vs mono-function
-
-REQUIRED: Base every descriptive word on a feature above. If a feature is zero or near-zero, treat it as absence — do not invent what isn't there.
+KEY FEATURES:
+- footway_length_m / road_length_m → dedicated walking vs shared road space
+- green_share → visual softness, shade, relief from hard surfaces
+- water_* features → openness, edge quality, reflective space
+- building_coverage → enclosure and urban density
+- car_orientation → traffic exposure, pedestrian comfort
+- walkable score → overall pedestrian signal
+- poi_density / poi_total → encounter density per step
+- nightlife / foodie / touristy → activation and destination-pull
+- residential → warmth vs anonymity
+- diversity → mixed-use texture vs mono-function
 
 cell_features={cell_features}
 scores={scores}
