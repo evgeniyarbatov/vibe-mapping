@@ -92,6 +92,44 @@ class GetPointsTests(unittest.TestCase):
         self.assertEqual(park_type, {"leisure": "park", "tourism": "attraction"})
         self.assertEqual(road_type, {"highway": "residential"})
 
+    def test_write_csv_keeps_unnamed_areas(self):
+        ways = [
+            [
+                "Unknown",
+                [(10.0, 20.0), (10.2, 20.2), (10.4, 20.4)],
+                "",
+                {"natural": "wood"},
+            ],
+            [
+                "Unknown",
+                [(11.0, 21.0), (11.2, 21.2), (11.4, 21.4)],
+                "",
+                {"natural": "beach"},
+            ],
+            [
+                "Duplicate Name",
+                [(12.0, 22.0), (12.2, 22.2), (12.4, 22.4)],
+                "",
+                {"tourism": "attraction"},
+            ],
+            [
+                "Duplicate Name",
+                [(13.0, 23.0), (13.2, 23.2), (13.4, 23.4)],
+                "",
+                {"tourism": "attraction"},
+            ],
+        ]
+
+        with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as tmp_file:
+            get_points.write_csv(ways, tmp_file.name)
+            tmp_file.seek(0)
+            rows = list(csv.DictReader(tmp_file))
+
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(row["name"] == "Unknown" for row in rows))
+        extracted_types = {json.loads(row["type"])["natural"] for row in rows}
+        self.assertEqual(extracted_types, {"wood", "beach"})
+
 
 if __name__ == "__main__":
     unittest.main()

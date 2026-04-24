@@ -161,8 +161,12 @@ class WayHandler(osmium.SimpleHandler):
 
 def write_csv(ways, filename):
     df = pd.DataFrame(ways, columns=["name", "way_nodes", "wikipedia_url", "type_details"])
-    df = df[df["name"] != "Unknown"]
-    df = df.drop_duplicates(subset="name", keep=False)
+    # Keep unnamed areas (name == "Unknown") but continue removing ambiguous
+    # duplicates among named places.
+    unnamed_mask = df["name"] == "Unknown"
+    named = df[~unnamed_mask].drop_duplicates(subset="name", keep=False)
+    unnamed = df[unnamed_mask]
+    df = pd.concat([named, unnamed], ignore_index=True)
 
     output_columns = ["name", "geometry", "wikipedia_url", "type"]
     if df.empty:
