@@ -1,0 +1,5 @@
+shapely
+geopandas
+pyosmium-e 
+black
+flake8
