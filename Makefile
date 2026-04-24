@@ -16,6 +16,7 @@ OSM_DIR = osm
 CIRCLE = osm/circle.poly
 POINTS = osm/area-points.csv
 POINTS_NORMALIZED = osm/area-points-normalized.csv
+AREA_CELLS = osm/area-cells.csv
 
 venv:
 	@python3 -m venv $(VENV_PATH)
@@ -52,3 +53,8 @@ points-normalized:
 	@$(PYTHON) scripts/normalize-area-points.py \
 	$(POINTS) \
 	$(POINTS_NORMALIZED);
+
+area-cells:
+	@$(PYTHON) scripts/build-area-cells.py \
+	$(POINTS_NORMALIZED) \
+	$(AREA_CELLS);
