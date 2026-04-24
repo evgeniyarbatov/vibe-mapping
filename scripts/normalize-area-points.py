@@ -277,6 +277,7 @@ def normalize_rows(rows):
             "name": row.get("name", ""),
             "geometry": row.get("geometry", ""),
             "category": category,
+            "type": row.get("type", ""),
         }
 
 
@@ -286,7 +287,7 @@ def normalize_csv(input_csv_path, output_csv_path):
         normalized_rows = list(normalize_rows(reader))
 
     with open(output_csv_path, "w", newline="", encoding="utf-8") as output_file:
-        writer = csv.DictWriter(output_file, fieldnames=["name", "geometry", "category"])
+        writer = csv.DictWriter(output_file, fieldnames=["name", "geometry", "category", "type"])
         writer.writeheader()
         writer.writerows(normalized_rows)
 

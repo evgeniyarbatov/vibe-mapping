@@ -81,7 +81,7 @@ class NormalizeAreaPointsTests(unittest.TestCase):
             normalizer.ROAD_HEAVY,
         )
 
-    def test_normalize_csv_outputs_name_geometry_category(self):
+    def test_normalize_csv_outputs_name_geometry_category_and_type(self):
         rows = [
             {
                 "name": "Neighborhood Road",
@@ -120,7 +120,7 @@ class NormalizeAreaPointsTests(unittest.TestCase):
             with open(output_path, newline="", encoding="utf-8") as output:
                 normalized_rows = list(csv.DictReader(output))
 
-        self.assertEqual(list(normalized_rows[0].keys()), ["name", "geometry", "category"])
+        self.assertEqual(list(normalized_rows[0].keys()), ["name", "geometry", "category", "type"])
         self.assertEqual(
             [row["category"] for row in normalized_rows],
             [
@@ -128,6 +128,10 @@ class NormalizeAreaPointsTests(unittest.TestCase):
                 normalizer.INDUSTRIAL_LOGISTICS,
                 normalizer.SCENIC_WATER_FOREST,
             ],
+        )
+        self.assertEqual(
+            [row["type"] for row in normalized_rows],
+            ['{"highway":"residential"}', '{"landuse":"industrial"}', '{"natural":"water","water":"lake"}'],
         )
 
 

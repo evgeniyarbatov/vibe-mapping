@@ -61,6 +61,23 @@ WATER_NAME_TERMS = {
     "sông",
 }
 
+WATER_NATURAL_VALUES = {
+    "water",
+}
+
+WATER_TAG_VALUES = {
+    "lake",
+    "river",
+    "canal",
+    "reservoir",
+    "pond",
+    "stream",
+    "basin",
+    "lagoon",
+    "bay",
+    "sea",
+}
+
 
 def _h3_latlng_to_cell(lat, lng, resolution):
     if hasattr(h3, "latlng_to_cell"):
@@ -130,6 +147,227 @@ def polygon_area_m2(ring):
     return abs(area) * 0.5
 
 
+def parse_type_field(type_field):
+    if not type_field:
+        return {}
+
+    try:
+        parsed = json.loads(type_field)
+    except json.JSONDecodeError:
+        return {}
+
+    if not isinstance(parsed, dict):
+        return {}
+
+    normalized = {}
+    for key, value in parsed.items():
+        if value is None:
+            continue
+        normalized[str(key).lower()] = str(value).lower()
+    return normalized
+
+
+def _ring_without_duplicate_endpoint(ring):
+    if not ring:
+        return []
+    if ring[0] == ring[-1]:
+        return ring[:-1]
+    return list(ring)
+
+
+def _ring_to_latlng(ring):
+    return [(float(lat), float(lon)) for lon, lat in _ring_without_duplicate_endpoint(ring)]
+
+
+def _rings_from_geometry(geometry):
+    geom_type = geometry.get("type")
+    coords = geometry.get("coordinates", [])
+
+    polygons = []
+    if geom_type == "Polygon":
+        if coords:
+            polygons.append(coords)
+        return polygons
+
+    if geom_type == "MultiPolygon":
+        for polygon in coords:
+            if polygon:
+                polygons.append(polygon)
+        return polygons
+
+    return polygons
+
+
+def _polygon_total_area_m2(polygon_rings):
+    if not polygon_rings:
+        return 0.0
+
+    outer_area = polygon_area_m2(polygon_rings[0])
+    holes_area = sum(polygon_area_m2(ring) for ring in polygon_rings[1:])
+    return max(outer_area - holes_area, 0.0)
+
+
+def _project_lonlat_to_xy(lon, lat, origin_lon_r, origin_lat_r):
+    lon_r = math.radians(lon)
+    lat_r = math.radians(lat)
+    x = EARTH_RADIUS_M * (lon_r - origin_lon_r) * math.cos(origin_lat_r)
+    y = EARTH_RADIUS_M * (lat_r - origin_lat_r)
+    return x, y
+
+
+def _ring_lonlat_to_xy(ring, origin_lon_r, origin_lat_r):
+    return [
+        _project_lonlat_to_xy(float(lon), float(lat), origin_lon_r, origin_lat_r)
+        for lon, lat in _ring_without_duplicate_endpoint(ring)
+    ]
+
+
+def _polygon_signed_area_xy(points):
+    if len(points) < 3:
+        return 0.0
+    area = 0.0
+    for (x1, y1), (x2, y2) in zip(points, points[1:] + [points[0]]):
+        area += x1 * y2 - x2 * y1
+    return area / 2.0
+
+
+def _is_inside_half_plane(point, edge_start, edge_end, orientation):
+    x, y = point
+    x1, y1 = edge_start
+    x2, y2 = edge_end
+    cross = (x2 - x1) * (y - y1) - (y2 - y1) * (x - x1)
+    return cross * orientation >= -1e-9
+
+
+def _line_intersection(p1, p2, p3, p4):
+    x1, y1 = p1
+    x2, y2 = p2
+    x3, y3 = p3
+    x4, y4 = p4
+
+    denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+    if math.isclose(denominator, 0.0, abs_tol=1e-12):
+        return p2
+
+    determinant_1 = x1 * y2 - y1 * x2
+    determinant_2 = x3 * y4 - y3 * x4
+    px = (determinant_1 * (x3 - x4) - (x1 - x2) * determinant_2) / denominator
+    py = (determinant_1 * (y3 - y4) - (y1 - y2) * determinant_2) / denominator
+    return px, py
+
+
+def _clip_polygon_with_convex(subject_polygon, clip_polygon):
+    if len(subject_polygon) < 3 or len(clip_polygon) < 3:
+        return []
+
+    output = list(subject_polygon)
+    orientation = 1.0 if _polygon_signed_area_xy(clip_polygon) >= 0.0 else -1.0
+
+    for edge_start, edge_end in zip(clip_polygon, clip_polygon[1:] + [clip_polygon[0]]):
+        input_points = output
+        output = []
+        if not input_points:
+            break
+
+        prev_point = input_points[-1]
+        prev_inside = _is_inside_half_plane(prev_point, edge_start, edge_end, orientation)
+
+        for curr_point in input_points:
+            curr_inside = _is_inside_half_plane(curr_point, edge_start, edge_end, orientation)
+            if curr_inside:
+                if not prev_inside:
+                    output.append(_line_intersection(prev_point, curr_point, edge_start, edge_end))
+                output.append(curr_point)
+            elif prev_inside:
+                output.append(_line_intersection(prev_point, curr_point, edge_start, edge_end))
+
+            prev_point = curr_point
+            prev_inside = curr_inside
+
+    return output
+
+
+def _clipped_ring_area_m2(subject_ring_lonlat, clip_ring_lonlat, origin_lon_r, origin_lat_r):
+    subject_xy = _ring_lonlat_to_xy(subject_ring_lonlat, origin_lon_r, origin_lat_r)
+    clip_xy = _ring_lonlat_to_xy(clip_ring_lonlat, origin_lon_r, origin_lat_r)
+    clipped_xy = _clip_polygon_with_convex(subject_xy, clip_xy)
+    return abs(_polygon_signed_area_xy(clipped_xy))
+
+
+def _h3_cells_overlapping_polygon(polygon_rings, resolution):
+    outer = _ring_to_latlng(polygon_rings[0]) if polygon_rings else []
+    holes = [_ring_to_latlng(ring) for ring in polygon_rings[1:]]
+    if len(outer) < 3:
+        return set()
+
+    polygon = h3.LatLngPoly(outer, *holes)
+    if hasattr(h3, "h3shape_to_cells_experimental"):
+        return set(h3.h3shape_to_cells_experimental(polygon, resolution, contain="overlap"))
+    if hasattr(h3, "polygon_to_cells_experimental"):
+        return set(h3.polygon_to_cells_experimental(polygon, resolution, contain="overlap"))
+    if hasattr(h3, "h3shape_to_cells"):
+        return set(h3.h3shape_to_cells(polygon, resolution))
+    return set(h3.polygon_to_cells(polygon, resolution))
+
+
+def distribute_polygon_area_across_cells(geometry, resolution):
+    allocations = defaultdict(float)
+    for polygon_rings in _rings_from_geometry(geometry):
+        polygon_area = _polygon_total_area_m2(polygon_rings)
+        if polygon_area <= 0.0:
+            continue
+
+        outer_ring = polygon_rings[0]
+        outer_lons = [pt[0] for pt in _ring_without_duplicate_endpoint(outer_ring)]
+        outer_lats = [pt[1] for pt in _ring_without_duplicate_endpoint(outer_ring)]
+        if not outer_lons or not outer_lats:
+            continue
+
+        origin_lon_r = math.radians(sum(outer_lons) / len(outer_lons))
+        origin_lat_r = math.radians(sum(outer_lats) / len(outer_lats))
+
+        overlapping_cells = _h3_cells_overlapping_polygon(polygon_rings, resolution)
+        if not overlapping_cells:
+            centroid = geometry_centroid_lonlat({"type": "Polygon", "coordinates": polygon_rings})
+            if centroid is not None:
+                lon, lat = centroid
+                allocations[_h3_latlng_to_cell(lat, lon, resolution)] += polygon_area
+            continue
+
+        intersection_areas = {}
+        for cell_id in overlapping_cells:
+            hex_ring = [[lng, lat] for lat, lng in _h3_cell_to_boundary(cell_id)]
+            if hex_ring and hex_ring[0] != hex_ring[-1]:
+                hex_ring.append(hex_ring[0])
+
+            overlap_area = _clipped_ring_area_m2(
+                polygon_rings[0], hex_ring, origin_lon_r, origin_lat_r
+            )
+            if overlap_area > 0.0:
+                for hole_ring in polygon_rings[1:]:
+                    overlap_area -= _clipped_ring_area_m2(
+                        hole_ring, hex_ring, origin_lon_r, origin_lat_r
+                    )
+                overlap_area = max(overlap_area, 0.0)
+
+            if overlap_area > 0.0:
+                intersection_areas[cell_id] = overlap_area
+
+        covered_area = sum(intersection_areas.values())
+        if covered_area <= 0.0:
+            centroid = geometry_centroid_lonlat({"type": "Polygon", "coordinates": polygon_rings})
+            if centroid is not None:
+                lon, lat = centroid
+                allocations[_h3_latlng_to_cell(lat, lon, resolution)] += polygon_area
+            continue
+
+        scale = polygon_area / covered_area
+        for cell_id, area_m2 in intersection_areas.items():
+            allocations[cell_id] += area_m2 * scale
+
+    return dict(allocations)
+
+
 def linestring_length_m(coords):
     if len(coords) < 2:
         return 0.0
@@ -159,12 +397,53 @@ def geometry_centroid_lonlat(geometry):
         lat = sum(pt[1] for pt in coords) / len(coords)
         return lon, lat
 
+    if geom_type == "MultiPolygon":
+        rings = _rings_from_geometry(geometry)
+        if not rings:
+            return None
+
+        weighted_lon = 0.0
+        weighted_lat = 0.0
+        total_area = 0.0
+        for polygon_rings in rings:
+            ring = polygon_rings[0] if polygon_rings else []
+            if not ring:
+                continue
+            area = _polygon_total_area_m2(polygon_rings)
+            if area <= 0:
+                continue
+            lon = sum(pt[0] for pt in ring) / len(ring)
+            lat = sum(pt[1] for pt in ring) / len(ring)
+            weighted_lon += lon * area
+            weighted_lat += lat * area
+            total_area += area
+
+        if total_area > 0:
+            return weighted_lon / total_area, weighted_lat / total_area
+
     return None
 
 
 def is_water_name(name):
     lowered = (name or "").lower()
     return any(term in lowered for term in WATER_NAME_TERMS)
+
+
+def is_water_feature(name, tags):
+    water = tags.get("water", "")
+    natural = tags.get("natural", "")
+    waterway = tags.get("waterway", "")
+    landuse = tags.get("landuse", "")
+
+    if water in WATER_TAG_VALUES:
+        return True
+    if natural in WATER_NATURAL_VALUES:
+        return True
+    if waterway in WATER_TAG_VALUES:
+        return True
+    if landuse in {"reservoir", "basin"}:
+        return True
+    return is_water_name(name)
 
 
 def init_cell_aggregate():
@@ -216,12 +495,7 @@ def update_poi_mix(cell, category, name):
         cell["parking_count"] += 1
 
 
-def update_land_texture(cell, category, name, geometry):
-    if geometry.get("type") != "Polygon":
-        return
-
-    ring = geometry.get("coordinates", [[]])[0]
-    area = polygon_area_m2(ring)
+def update_land_texture(cell, category, name, tags, area):
     if area <= 0.0:
         return
 
@@ -229,7 +503,7 @@ def update_land_texture(cell, category, name, geometry):
         cell["green_area_m2"] += area
 
     if category == SCENIC_WATER_FOREST:
-        if is_water_name(name):
+        if is_water_feature(name, tags):
             cell["water_area_m2"] += area
         else:
             cell["green_area_m2"] += area
@@ -407,11 +681,15 @@ def aggregate_cells(input_csv_path, resolution):
             cell_id = _h3_latlng_to_cell(lat, lon, resolution)
             category = row["category"]
             name = row["name"]
+            tags = parse_type_field(row.get("type", ""))
 
             cell = cells[cell_id]
             update_poi_mix(cell, category, name)
-            update_land_texture(cell, category, name, geometry)
             update_streets(cell, category, geometry)
+
+            area_allocations = distribute_polygon_area_across_cells(geometry, resolution)
+            for area_cell_id, area in area_allocations.items():
+                update_land_texture(cells[area_cell_id], category, name, tags, area)
 
     for cell_id, cell in cells.items():
         area_m2 = _h3_cell_area_m2(cell_id)

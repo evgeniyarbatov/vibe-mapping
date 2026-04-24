@@ -259,6 +259,91 @@ class BuildAreaCellsTests(unittest.TestCase):
             distance_km = builder.haversine_m(20.0, 105.0, cell_lat, cell_lon) / 1000.0
             self.assertLessEqual(distance_km, 1.0)
 
+    def test_aggregate_cells_distributes_polygon_area_and_handles_unnamed_water(self):
+        water_ring = [
+            [105.0, 20.0],
+            [105.018, 20.0],
+            [105.018, 20.018],
+            [105.0, 20.018],
+            [105.0, 20.0],
+        ]
+        green_ring = [
+            [105.03, 20.0],
+            [105.048, 20.0],
+            [105.048, 20.018],
+            [105.03, 20.018],
+            [105.03, 20.0],
+        ]
+        residential_ring = [
+            [105.0, 20.03],
+            [105.018, 20.03],
+            [105.018, 20.048],
+            [105.0, 20.048],
+            [105.0, 20.03],
+        ]
+
+        rows = [
+            {
+                "name": "Unknown",
+                "geometry": json.dumps({"type": "Polygon", "coordinates": [water_ring]}),
+                "category": builder.SCENIC_WATER_FOREST,
+                "type": '{"natural":"water","water":"lake"}',
+            },
+            {
+                "name": "Unknown",
+                "geometry": json.dumps({"type": "Polygon", "coordinates": [green_ring]}),
+                "category": builder.NATURE_QUIET,
+                "type": '{"natural":"wood"}',
+            },
+            {
+                "name": "Neighborhood",
+                "geometry": json.dumps({"type": "Polygon", "coordinates": [residential_ring]}),
+                "category": builder.FAMILY_RESIDENTIAL,
+                "type": '{"building":"residential"}',
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "input.csv"
+            with input_path.open("w", newline="", encoding="utf-8") as source:
+                writer = csv.DictWriter(source, fieldnames=["name", "geometry", "category", "type"])
+                writer.writeheader()
+                writer.writerows(rows)
+
+            cells = builder.aggregate_cells(str(input_path), resolution=9)
+
+        self.assertGreater(len(cells), 3)
+
+        expected_water_area = builder.polygon_area_m2(water_ring)
+        expected_green_area = builder.polygon_area_m2(green_ring)
+        expected_residential_area = builder.polygon_area_m2(residential_ring)
+
+        total_water_area = sum(features["water_area_m2"] for features in cells.values())
+        total_green_area = sum(features["green_area_m2"] for features in cells.values())
+        total_residential_area = sum(features["residential_area_m2"] for features in cells.values())
+        total_building_area = sum(features["building_area_m2"] for features in cells.values())
+
+        water_cells = [features for features in cells.values() if features["water_area_m2"] > 0]
+        green_cells = [features for features in cells.values() if features["green_area_m2"] > 0]
+        residential_cells = [features for features in cells.values() if features["residential_area_m2"] > 0]
+
+        self.assertGreater(len(water_cells), 1)
+        self.assertGreater(len(green_cells), 1)
+        self.assertGreater(len(residential_cells), 1)
+
+        self.assertAlmostEqual(total_water_area, expected_water_area, delta=expected_water_area * 0.01)
+        self.assertAlmostEqual(total_green_area, expected_green_area, delta=expected_green_area * 0.01)
+        self.assertAlmostEqual(
+            total_residential_area,
+            expected_residential_area,
+            delta=expected_residential_area * 0.01,
+        )
+        self.assertAlmostEqual(
+            total_building_area,
+            expected_residential_area,
+            delta=expected_residential_area * 0.01,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

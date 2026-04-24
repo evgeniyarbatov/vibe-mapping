@@ -23,7 +23,7 @@ The system is intentionally staged. Each stage writes an artifact that becomes t
 | Circle polygon | `scripts/get-circle.py` | `osm/circle.poly` | OSM polygon file for clipping |
 | Area OSM clip | `make area` (`osmconvert` + `osmium`) | `osm/area.osm` | OSM XML |
 | Raw points | `scripts/get-points.py` | `osm/area-points.csv` | `name`, `geometry`, `wikipedia_url`, `type` |
-| Normalized points | `scripts/normalize-area-points.py` | `osm/area-points-normalized.csv` | `name`, `geometry`, `category` |
+| Normalized points | `scripts/normalize-area-points.py` | `osm/area-points-normalized.csv` | `name`, `geometry`, `category`, `type` |
 | Category KML map | `scripts/build-area-points-kml.py` | `osm/area-points.kml` | KML features styled by `category` |
 | Cell features + scores | `scripts/build-area-cells.py` | `osm/area-cells.csv` | `cell_id`, `cell_features` (JSON), `scores` (JSON), `cell_boundary` (GeoJSON Polygon JSON) |
 | Vibe text + label | `scripts/build-area-vibe.py` | `osm/area-vibe.csv` | `cell_id`, `cell_boundary`, `vibe`, `label` |
@@ -60,6 +60,7 @@ Output schema is always:
 - `name`
 - `geometry`
 - `category`
+- `type` (original filtered tag JSON, preserved for downstream feature logic)
 
 Categories:
 - `Food & café`
@@ -89,6 +90,9 @@ Feature engineering includes:
 - Land texture (`green_area_m2`, `water_area_m2`, `building_area_m2`, etc.)
 - Street structure (`road_length_m`, `major_road_length_m`, `footway_length_m`, intersections)
 - Derived metrics (`poi_density`, `walkability_proxy`, `car_orientation`, `diversity`, etc.)
+
+Polygon land areas are distributed across all overlapping H3 cells using polygon-cell overlap area (instead of assigning full polygon area to a single centroid cell).
+Water-vs-green detection for `Scenic / water / forest` now uses OSM tags from `type` first (with name-term fallback), which correctly handles unnamed water bodies.
 
 Scores include:
 - `busy`, `touristy`, `foodie`, `nightlife`, `green_quiet`,
