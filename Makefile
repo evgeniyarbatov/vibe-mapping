@@ -11,12 +11,12 @@ RADIUS_KM = 5
 H3_RESOLUTION = 7
 
 # Hai Tien
-# START_LAT = 19.843303820107394
-# START_LON = 105.93544337695647
+START_LAT = 19.843303820107394
+START_LON = 105.93544337695647
 
 # Times City
-START_LAT = 20.9948665623132
-START_LON = 105.86777883150903
+# START_LAT = 20.9948665623132
+# START_LON = 105.86777883150903
 
 OSM_DIR = osm
 
@@ -50,8 +50,6 @@ circle:
 	$(CIRCLE);
 
 area: circle
-	@osmconvert $(OSM_DIR)/$(COUNTRY_OSM_FILE) -B=$(CIRCLE) -o=$(OSM_DIR)/foot/area.osm.pbf
-	@osmconvert $(OSM_DIR)/$(COUNTRY_OSM_FILE) -B=$(CIRCLE) -o=$(OSM_DIR)/bicycle/area.osm.pbf
 	@osmium cat --overwrite $(OSM_DIR)/foot/area.osm.pbf -o $(OSM_DIR)/area.osm
 
 points:
