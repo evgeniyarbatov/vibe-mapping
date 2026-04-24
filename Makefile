@@ -8,7 +8,7 @@ OSM_URL = https://download.geofabrik.de/asia/vietnam-latest.osm.pbf
 COUNTRY_OSM_FILE = $$(basename $(OSM_URL))
 
 RADIUS_KM = 30
-H3_RESOLUTION = 5
+H3_RESOLUTION = 7
 
 # Hai Tien
 START_LAT = 19.843303820107394
@@ -60,12 +60,12 @@ points:
 	$(OSM_DIR)/area.osm \
 	$(POINTS);
 
-points-normalized: points
+points-normalized:
 	@$(PYTHON) scripts/normalize-area-points.py \
 	$(POINTS) \
 	$(POINTS_NORMALIZED);
 
-area-cells: points-normalized
+area-cells:
 	@$(PYTHON) scripts/build-area-cells.py \
 	--resolution $(H3_RESOLUTION) \
 	$(POINTS_NORMALIZED) \
