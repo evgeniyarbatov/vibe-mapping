@@ -21,7 +21,3 @@ country:
 	if [ ! -f $(OSM_DIR)/$(COUNTRY_OSM_FILE) ]; then \
 		wget $(OSM_URL) -P $(OSM_DIR); \
 	fi
-
-osmextract:
-	@osmconvert $(OSM_DIR)/$(COUNTRY_OSM_FILE) -B=$(BOUNDARY_POLY) -o=$(OSM_DIR)/times-city.osm.pbf
-	@osmium cat --overwrite $(OSM_DIR)/times-city.osm.pbf -o $(OSM_DIR)/times-city.osm
