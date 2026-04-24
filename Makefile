@@ -7,8 +7,13 @@ REQUIREMENTS := requirements.txt
 OSM_URL = https://download.geofabrik.de/asia/vietnam-latest.osm.pbf
 COUNTRY_OSM_FILE = $$(basename $(OSM_URL))
 
+RADIUS_KM = 30
+START_LAT = 19.843303820107394
+START_LON = 105.93544337695647
+
 OSM_DIR = osm
-BOUNDARY_POLY = osm/times-city.poly
+
+CIRCLE = osm/circle.poly
 
 venv:
 	@python3 -m venv $(VENV_PATH)
@@ -21,3 +26,10 @@ country:
 	if [ ! -f $(OSM_DIR)/$(COUNTRY_OSM_FILE) ]; then \
 		wget $(OSM_URL) -P $(OSM_DIR); \
 	fi
+
+circle:
+	@$(PYTHON) scripts/get-circle.py \
+	$(START_LAT) \
+	$(START_LON) \
+	$(RADIUS_KM) \
+	$(CIRCLE);
