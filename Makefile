@@ -21,6 +21,9 @@ CIRCLE = osm/circle.poly
 POINTS = osm/area-points.csv
 POINTS_NORMALIZED = osm/area-points-normalized.csv
 AREA_CELLS = osm/area-cells.csv
+AREA_VIBE = osm/area-vibe.csv
+OLLAMA_MODEL = mistral-nemo
+OLLAMA_URL = http://127.0.0.1:11434
 
 venv:
 	@python3 -m venv $(VENV_PATH)
@@ -63,3 +66,10 @@ area-cells: points-normalized
 	--resolution $(H3_RESOLUTION) \
 	$(POINTS_NORMALIZED) \
 	$(AREA_CELLS);
+
+area-vibe: area-cells
+	@$(PYTHON) scripts/build-area-vibe.py \
+	--model $(OLLAMA_MODEL) \
+	--ollama-url $(OLLAMA_URL) \
+	$(AREA_CELLS) \
+	$(AREA_VIBE);

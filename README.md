@@ -12,3 +12,7 @@ Use `make points-normalized` to run it.
 `scripts/build-area-cells.py` reads `osm/area-points-normalized.csv`, assigns each feature to an H3 cell, aggregates per-cell features, computes vibe scores, and writes:
 `data/area-cells.csv` with columns `cell_id`, `cell_features`, `scores`, `cell_boundary`.
 Use `make area-cells` to run it.
+
+`scripts/build-area-vibe.py` reads `osm/area-cells.csv`, calls local Ollama (`mistral-nemo` by default), and writes:
+`osm/area-vibe.csv` with columns `cell_id`, `cell_boundary`, `vibe`.
+Use `make area-vibe` to run it.
