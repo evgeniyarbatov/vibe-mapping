@@ -119,6 +119,14 @@ def geometry_to_geojson(way_nodes):
     return json.dumps(geometry, separators=(",", ":"))
 
 
+def type_details_to_json(type_details):
+    return json.dumps(type_details, separators=(",", ":"), sort_keys=True)
+
+
+def extract_type_details(tags):
+    return {key: tags[key] for key in REQUESTED_TAG_KEYS if tags.get(key) is not None}
+
+
 # --- OSM HANDLER ---
 
 
@@ -144,26 +152,25 @@ class WayHandler(osmium.SimpleHandler):
 
         name = get_name(tag_map)
         wiki_url = get_wikipedia_url(tag_map)
-        category_values = {key: tag_map.get(key, "") for key in REQUESTED_TAG_KEYS}
-        self.ways.append([name, way_nodes, wiki_url, category_values])
+        type_details = extract_type_details(tag_map)
+        self.ways.append([name, way_nodes, wiki_url, type_details])
 
 
 # --- UTILITIES ---
 
 
 def write_csv(ways, filename):
-    df = pd.DataFrame(ways, columns=["name", "way_nodes", "wikipedia_url", "category_values"])
+    df = pd.DataFrame(ways, columns=["name", "way_nodes", "wikipedia_url", "type_details"])
     df = df[df["name"] != "Unknown"]
     df = df.drop_duplicates(subset="name", keep=False)
 
-    output_columns = ["name", "geometry", "wikipedia_url", *REQUESTED_TAG_KEYS]
+    output_columns = ["name", "geometry", "wikipedia_url", "type"]
     if df.empty:
         pd.DataFrame(columns=output_columns).to_csv(filename, index=False)
         return
 
     df["geometry"] = df["way_nodes"].apply(geometry_to_geojson)
-    for key in REQUESTED_TAG_KEYS:
-        df[key] = df["category_values"].apply(lambda values: values.get(key, ""))
+    df["type"] = df["type_details"].apply(type_details_to_json)
 
     df[output_columns].to_csv(filename, index=False)
 

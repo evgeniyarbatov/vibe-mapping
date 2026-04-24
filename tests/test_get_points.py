@@ -45,7 +45,13 @@ class GetPointsTests(unittest.TestCase):
         self.assertEqual(line["type"], "LineString")
         self.assertEqual(line["coordinates"][0], [20.0, 10.0])
 
-    def test_write_csv_outputs_geometry_and_category_columns(self):
+    def test_extract_type_details(self):
+        details = get_points.extract_type_details(
+            {"tourism": "museum", "historic": "monument", "religion": "buddhist"}
+        )
+        self.assertEqual(details, {"tourism": "museum", "historic": "monument"})
+
+    def test_write_csv_outputs_geometry_and_compact_type_column(self):
         ways = [
             [
                 "City Park",
@@ -68,18 +74,23 @@ class GetPointsTests(unittest.TestCase):
 
         self.assertEqual(len(rows), 2)
         self.assertIn("geometry", rows[0])
+        self.assertIn("type", rows[0])
         self.assertNotIn("lat", rows[0])
         self.assertNotIn("lon", rows[0])
+        self.assertNotIn("leisure", rows[0])
+        self.assertNotIn("tourism", rows[0])
+        self.assertNotIn("highway", rows[0])
 
         rows_by_name = {row["name"]: row for row in rows}
         park_geom = json.loads(rows_by_name["City Park"]["geometry"])
         road_geom = json.loads(rows_by_name["Main Street"]["geometry"])
+        park_type = json.loads(rows_by_name["City Park"]["type"])
+        road_type = json.loads(rows_by_name["Main Street"]["type"])
 
         self.assertEqual(park_geom["type"], "Polygon")
         self.assertEqual(road_geom["type"], "LineString")
-        self.assertEqual(rows_by_name["City Park"]["leisure"], "park")
-        self.assertEqual(rows_by_name["City Park"]["tourism"], "attraction")
-        self.assertEqual(rows_by_name["Main Street"]["highway"], "residential")
+        self.assertEqual(park_type, {"leisure": "park", "tourism": "attraction"})
+        self.assertEqual(road_type, {"highway": "residential"})
 
 
 if __name__ == "__main__":

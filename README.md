@@ -2,5 +2,5 @@
 
 What is the vibe of a place based on OSM map? Experiment to understand subjective experience from map data.
 
-`scripts/get-points.py` exports area features to CSV with full geometry in a `geometry` column (GeoJSON `Polygon` or `LineString`) plus tag columns:
+`scripts/get-points.py` exports area features to CSV with full geometry in a `geometry` column (GeoJSON `Polygon` or `LineString`) and a compact `type` JSON column containing matched tag details from:
 `amenity`, `shop`, `tourism`, `leisure`, `natural`, `landuse`, `building`, `highway`, `water`, `historic`, `cultural`.
