@@ -44,7 +44,7 @@ USER_PROMPT_TEMPLATE = (
     "- negative: uncomfortable, unsafe-feeling, dull, or hostile\n\n"
 
     "Return ONLY:\n"
-    "{\"vibe\":\"...\",\"label\":\"positive|mixed|negative\"}\n\n"
+    "{{\"vibe\":\"...\",\"label\":\"positive|mixed|negative\"}}\n\n"
 
     "cell_features={cell_features}\n"
     "scores={scores}\n"
