@@ -61,17 +61,17 @@ points:
 	$(OSM_DIR)/area.osm \
 	$(POINTS);
 
-points-normalized:
+points-normalized: points
 	@$(PYTHON) scripts/normalize-area-points.py \
 	$(POINTS) \
 	$(POINTS_NORMALIZED);
 
-area-points-kml:
+area-points-kml: points-normalized
 	@$(PYTHON) scripts/build-area-points-kml.py \
 	$(POINTS_NORMALIZED) \
 	$(AREA_POINTS_KML);
 
-area-cells:
+area-cells: points-normalized
 	@$(PYTHON) scripts/build-area-cells.py \
 	--resolution $(H3_RESOLUTION) \
 	$(POINTS_NORMALIZED) \
