@@ -19,5 +19,6 @@ Use `make area-cells` to run it.
 Use `make area-vibe` to run it.
 
 `scripts/build-area-vibe-kml.py` reads `osm/area-vibe.csv` and writes:
-`osm/area-vibe.kml` with colored area polygons and label points for each area.
+`osm/area-vibe.kml` with area polygons and label points for each area, color-coded by `label`:
+`positive` (green), `mixed` (yellow), `negative` (red).
 Use `make area-vibe-kml` to run it.

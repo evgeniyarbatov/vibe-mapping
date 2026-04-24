@@ -34,24 +34,32 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
                 "cell_id": "cell-a",
                 "cell_boundary": '{"type":"Polygon","coordinates":[[[105.0,20.0],[105.2,20.0],[105.2,20.2],[105.0,20.2],[105.0,20.0]]]}',
                 "vibe": "Quiet Industrial",
+                "label": "positive",
             },
             {
                 "cell_id": "cell-b",
                 "cell_boundary": '{"type":"Polygon","coordinates":[[[106.0,21.0],[106.2,21.0],[106.2,21.2],[106.0,21.2],[106.0,21.0]]]}',
-                "vibe": "Quietly Cultural",
+                "vibe": "Harsh Road Corridor",
+                "label": "negative",
+            },
+            {
+                "cell_id": "cell-c",
+                "cell_boundary": '{"type":"Polygon","coordinates":[[[106.5,21.5],[106.7,21.5],[106.7,21.7],[106.5,21.7],[106.5,21.5]]]}',
+                "vibe": "Calm Residential Pocket",
+                "label": "positive",
             },
         ]
 
         with tempfile.TemporaryDirectory() as temp_dir:
             input_path = Path(temp_dir) / "area-vibe.csv"
             output_path = Path(temp_dir) / "area-vibe.kml"
-            self.write_csv(input_path, ["cell_id", "cell_boundary", "vibe"], rows)
+            self.write_csv(input_path, ["cell_id", "cell_boundary", "vibe", "label"], rows)
 
             kml_builder.build_area_vibe_kml(str(input_path), str(output_path))
 
             tree = ET.parse(output_path)
             placemarks = tree.findall(".//kml:Placemark", namespaces=KML_NS)
-            self.assertEqual(len(placemarks), 4)
+            self.assertEqual(len(placemarks), 6)
 
             area_placemarks = [
                 placemark
@@ -64,21 +72,49 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
                 if placemark.find("kml:Point", namespaces=KML_NS) is not None
             ]
 
-            self.assertEqual(len(area_placemarks), 2)
-            self.assertEqual(len(label_placemarks), 2)
+            self.assertEqual(len(area_placemarks), 3)
+            self.assertEqual(len(label_placemarks), 3)
 
             area_style_urls = [
                 placemark.find("kml:styleUrl", namespaces=KML_NS).text for placemark in area_placemarks
             ]
             self.assertEqual(len(set(area_style_urls)), 2)
+            self.assertIn("#area-label-positive", area_style_urls)
+            self.assertIn("#area-label-negative", area_style_urls)
 
             first_label_name = label_placemarks[0].find("kml:name", namespaces=KML_NS).text
-            self.assertIn(first_label_name, {"Quiet Industrial", "Quietly Cultural"})
+            self.assertIn(
+                first_label_name,
+                {"Quiet Industrial", "Harsh Road Corridor", "Calm Residential Pocket"},
+            )
 
             first_label_coords = label_placemarks[0].find(
                 ".//kml:coordinates", namespaces=KML_NS
             ).text
             self.assertRegex(first_label_coords, r"^\d+\.\d+,\d+\.\d+,0$")
+
+    def test_build_area_vibe_kml_defaults_invalid_label_to_mixed(self):
+        rows = [
+            {
+                "cell_id": "cell-a",
+                "cell_boundary": '{"type":"Polygon","coordinates":[[[105.0,20.0],[105.2,20.0],[105.2,20.2],[105.0,20.2],[105.0,20.0]]]}',
+                "vibe": "Uncertain vibe",
+                "label": "unknown",
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "area-vibe.csv"
+            output_path = Path(temp_dir) / "area-vibe.kml"
+            self.write_csv(input_path, ["cell_id", "cell_boundary", "vibe", "label"], rows)
+
+            kml_builder.build_area_vibe_kml(str(input_path), str(output_path))
+            tree = ET.parse(output_path)
+
+            area_style_url = tree.find(
+                ".//kml:Placemark/kml:styleUrl", namespaces=KML_NS
+            ).text
+            self.assertEqual(area_style_url, "#area-label-mixed")
 
     def test_build_area_vibe_kml_rejects_missing_required_column(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -86,16 +122,17 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
             output_path = Path(temp_dir) / "area-vibe.kml"
             self.write_csv(
                 input_path,
-                ["cell_id", "cell_boundary"],
+                ["cell_id", "cell_boundary", "vibe"],
                 [
                     {
                         "cell_id": "cell-a",
                         "cell_boundary": '{"type":"Polygon","coordinates":[[[105.0,20.0],[105.1,20.0],[105.1,20.1],[105.0,20.0]]]}',
+                        "vibe": "Quiet streets",
                     }
                 ],
             )
 
-            with self.assertRaisesRegex(ValueError, "Missing required columns: vibe"):
+            with self.assertRaisesRegex(ValueError, "Missing required columns: label"):
                 kml_builder.build_area_vibe_kml(str(input_path), str(output_path))
 
     def test_build_area_vibe_kml_rejects_invalid_boundary_json(self):
@@ -104,8 +141,15 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
             output_path = Path(temp_dir) / "area-vibe.kml"
             self.write_csv(
                 input_path,
-                ["cell_id", "cell_boundary", "vibe"],
-                [{"cell_id": "cell-a", "cell_boundary": "{bad-json}", "vibe": "Quiet"}],
+                ["cell_id", "cell_boundary", "vibe", "label"],
+                [
+                    {
+                        "cell_id": "cell-a",
+                        "cell_boundary": "{bad-json}",
+                        "vibe": "Quiet",
+                        "label": "mixed",
+                    }
+                ],
             )
 
             with self.assertRaisesRegex(ValueError, "invalid JSON in cell_boundary"):

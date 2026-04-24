@@ -6,22 +6,14 @@ from xml.etree import ElementTree as ET
 
 
 KML_NS = "http://www.opengis.net/kml/2.2"
-REQUIRED_COLUMNS = {"cell_id", "cell_boundary", "vibe"}
+REQUIRED_COLUMNS = {"cell_id", "cell_boundary", "vibe", "label"}
+VALID_LABELS = {"positive", "mixed", "negative"}
 
-COLOR_PALETTE = [
-    "E4572E",
-    "17BEBB",
-    "FFC914",
-    "2E282A",
-    "76B041",
-    "3D5A80",
-    "F18F01",
-    "0081A7",
-    "A44A3F",
-    "4F772D",
-    "6B9080",
-    "C1666B",
-]
+LABEL_COLORS = {
+    "positive": "2E8B57",
+    "mixed": "E9C46A",
+    "negative": "C1121F",
+}
 
 
 def sanitize_vibe(vibe):
@@ -31,12 +23,11 @@ def sanitize_vibe(vibe):
     return "Unclassified vibe"
 
 
-def sanitize_style_id(vibe, index):
-    raw = "".join(ch.lower() if ch.isalnum() else "-" for ch in str(vibe or ""))
-    collapsed = "-".join(part for part in raw.split("-") if part)
-    if collapsed:
-        return f"vibe-{index}-{collapsed}"
-    return f"vibe-{index}"
+def normalize_label(label):
+    cleaned = str(label or "").strip().lower()
+    if cleaned in VALID_LABELS:
+        return cleaned
+    return "mixed"
 
 
 def rgb_to_kml_color(rgb_hex, alpha):
@@ -192,12 +183,14 @@ def read_area_vibe_rows(input_csv_path):
         for row in reader:
             cell_id = row["cell_id"]
             vibe = sanitize_vibe(row["vibe"])
+            label = normalize_label(row.get("label"))
             polygons = parse_polygons(cell_id, row["cell_boundary"])
             centroid_lon, centroid_lat = polygon_centroid(polygons)
             rows.append(
                 {
                     "cell_id": cell_id,
                     "vibe": vibe,
+                    "label": label,
                     "polygons": polygons,
                     "centroid": (centroid_lon, centroid_lat),
                 }
@@ -205,15 +198,16 @@ def read_area_vibe_rows(input_csv_path):
     return rows
 
 
-def build_vibe_styles(rows):
-    vibe_values = sorted({row["vibe"] for row in rows}, key=str.casefold)
+def build_label_styles(rows):
+    labels_present = {row["label"] for row in rows}
     styles = {}
-    for index, vibe in enumerate(vibe_values, start=1):
-        rgb = COLOR_PALETTE[(index - 1) % len(COLOR_PALETTE)]
-        style_id = sanitize_style_id(vibe, index)
-        styles[vibe] = {
-            "area_style_id": f"area-{style_id}",
-            "label_style_id": f"label-{style_id}",
+    for label in ["positive", "mixed", "negative"]:
+        if label not in labels_present:
+            continue
+        rgb = LABEL_COLORS[label]
+        styles[label] = {
+            "area_style_id": f"area-label-{label}",
+            "label_style_id": f"label-label-{label}",
             "line_color": rgb_to_kml_color(rgb, "ff"),
             "fill_color": rgb_to_kml_color(rgb, "88"),
             "label_color": rgb_to_kml_color(rgb, "ff"),
@@ -243,7 +237,9 @@ def add_styles(document, styles):
 def add_area_placemark(document, row, style):
     area = ET.SubElement(document, f"{{{KML_NS}}}Placemark")
     ET.SubElement(area, f"{{{KML_NS}}}name").text = f"{row['vibe']} ({row['cell_id']})"
-    ET.SubElement(area, f"{{{KML_NS}}}description").text = f"Area {row['cell_id']} | vibe: {row['vibe']}"
+    ET.SubElement(area, f"{{{KML_NS}}}description").text = (
+        f"Area {row['cell_id']} | vibe: {row['vibe']} | label: {row['label']}"
+    )
     ET.SubElement(area, f"{{{KML_NS}}}styleUrl").text = f"#{style['area_style_id']}"
 
     polygons = row["polygons"]
@@ -259,7 +255,9 @@ def add_area_placemark(document, row, style):
 def add_label_placemark(document, row, style):
     label = ET.SubElement(document, f"{{{KML_NS}}}Placemark")
     ET.SubElement(label, f"{{{KML_NS}}}name").text = row["vibe"]
-    ET.SubElement(label, f"{{{KML_NS}}}description").text = f"Label for area {row['cell_id']}"
+    ET.SubElement(label, f"{{{KML_NS}}}description").text = (
+        f"Label for area {row['cell_id']} | label: {row['label']}"
+    )
     ET.SubElement(label, f"{{{KML_NS}}}styleUrl").text = f"#{style['label_style_id']}"
 
     point = ET.SubElement(label, f"{{{KML_NS}}}Point")
@@ -269,7 +267,7 @@ def add_label_placemark(document, row, style):
 
 def build_area_vibe_kml(input_csv_path, output_kml_path):
     rows = read_area_vibe_rows(input_csv_path)
-    styles = build_vibe_styles(rows)
+    styles = build_label_styles(rows)
 
     output_path = Path(output_kml_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -281,7 +279,7 @@ def build_area_vibe_kml(input_csv_path, output_kml_path):
 
     add_styles(document, styles)
     for row in rows:
-        style = styles[row["vibe"]]
+        style = styles[row["label"]]
         add_area_placemark(document, row, style)
         add_label_placemark(document, row, style)
 
@@ -295,7 +293,7 @@ def build_area_vibe_kml(input_csv_path, output_kml_path):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("input_csv", help="Input CSV with columns: cell_id, cell_boundary, vibe")
+    parser.add_argument("input_csv", help="Input CSV with columns: cell_id, cell_boundary, vibe, label")
     parser.add_argument("output_kml", help="Output KML path")
     return parser.parse_args()
 
