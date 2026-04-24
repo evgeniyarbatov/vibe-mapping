@@ -1,1 +1,4 @@
 geopy
+osmium
+pandas
+haversine

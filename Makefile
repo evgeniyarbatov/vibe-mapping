@@ -14,6 +14,7 @@ START_LON = 105.93544337695647
 OSM_DIR = osm
 
 CIRCLE = osm/circle.poly
+POINTS = osm/area-points.csv
 
 venv:
 	@python3 -m venv $(VENV_PATH)
@@ -38,3 +39,10 @@ area:
 	@osmconvert $(OSM_DIR)/$(COUNTRY_OSM_FILE) -B=$(CIRCLE) -o=$(OSM_DIR)/foot/area.osm.pbf
 	@osmconvert $(OSM_DIR)/$(COUNTRY_OSM_FILE) -B=$(CIRCLE) -o=$(OSM_DIR)/bicycle/area.osm.pbf
 	@osmium cat --overwrite $(OSM_DIR)/foot/area.osm.pbf -o $(OSM_DIR)/area.osm
+
+points:
+	@$(PYTHON) scripts/get-points.py \
+	$(START_LAT) \
+	$(START_LON) \
+	$(OSM_DIR)/area.osm \
+	$(POINTS);
