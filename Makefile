@@ -68,14 +68,14 @@ area-cells: points-normalized
 	$(POINTS_NORMALIZED) \
 	$(AREA_CELLS);
 
-area-vibe: area-cells
+area-vibe:
 	@$(PYTHON) scripts/build-area-vibe.py \
 	--model $(OLLAMA_MODEL) \
 	--ollama-url $(OLLAMA_URL) \
 	$(AREA_CELLS) \
 	$(AREA_VIBE);
 
-area-vibe-kml: area-vibe
+area-vibe-kml:
 	@$(PYTHON) scripts/build-area-vibe-kml.py \
 	$(AREA_VIBE) \
 	$(AREA_VIBE_KML);
