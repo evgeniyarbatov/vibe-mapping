@@ -82,6 +82,8 @@ WATER_TAG_VALUES = {
     "sea",
 }
 
+COASTLINE_BAND_WIDTH_M = 300.0
+
 
 def _h3_latlng_to_cell(lat, lng, resolution):
     if hasattr(h3, "latlng_to_cell"):
@@ -109,6 +111,12 @@ def _h3_cell_to_latlng(cell_id):
         return float(lat), float(lng)
     lat, lng = h3.h3_to_geo(cell_id)
     return float(lat), float(lng)
+
+
+def _h3_grid_path_cells(start_cell, end_cell):
+    if hasattr(h3, "grid_path_cells"):
+        return list(h3.grid_path_cells(start_cell, end_cell))
+    return list(h3.h3_line(start_cell, end_cell))
 
 
 def haversine_m(lat1, lon1, lat2, lon2):
@@ -382,6 +390,32 @@ def linestring_length_m(coords):
     return length
 
 
+def distribute_linestring_length_across_cells(coords, resolution):
+    if len(coords) < 2:
+        return {}
+
+    allocations = defaultdict(float)
+    for (lon1, lat1), (lon2, lat2) in zip(coords, coords[1:]):
+        segment_length = haversine_m(lat1, lon1, lat2, lon2)
+        if segment_length <= 0.0:
+            continue
+
+        start_cell = _h3_latlng_to_cell(lat1, lon1, resolution)
+        end_cell = _h3_latlng_to_cell(lat2, lon2, resolution)
+        try:
+            path_cells = _h3_grid_path_cells(start_cell, end_cell)
+        except Exception:
+            path_cells = [start_cell] if start_cell == end_cell else [start_cell, end_cell]
+
+        if not path_cells:
+            continue
+        per_cell_length = segment_length / len(path_cells)
+        for cell_id in path_cells:
+            allocations[cell_id] += per_cell_length
+
+    return dict(allocations)
+
+
 def geometry_centroid_lonlat(geometry):
     coords = geometry.get("coordinates", [])
     geom_type = geometry.get("type")
@@ -448,6 +482,10 @@ def is_water_feature(name, tags):
     if landuse in {"reservoir", "basin"}:
         return True
     return is_water_name(name)
+
+
+def is_coastline_like_feature(tags):
+    return tags.get("natural", "") in {"coastline", "beach"}
 
 
 def init_cell_aggregate():
@@ -522,6 +560,27 @@ def update_land_texture(cell, category, name, tags, area):
         cell["building_area_m2"] += area
 
 
+def update_water_from_lines(cells, category, name, tags, geometry, resolution):
+    if geometry.get("type") != "LineString":
+        return
+    if category != SCENIC_WATER_FOREST:
+        return
+    if not is_water_feature(name, tags):
+        return
+    if not is_coastline_like_feature(tags):
+        return
+
+    coords = geometry.get("coordinates", [])
+    if len(coords) < 2:
+        return
+
+    length_allocations = distribute_linestring_length_across_cells(coords, resolution)
+    for cell_id, length_m in length_allocations.items():
+        if length_m <= 0.0:
+            continue
+        cells[cell_id]["water_area_m2"] += length_m * COASTLINE_BAND_WIDTH_M
+
+
 def endpoint_key(lon, lat, precision=6):
     return f"{round(lon, precision):.{precision}f},{round(lat, precision):.{precision}f}"
 
@@ -560,6 +619,9 @@ def add_derived_fields(cell, cell_area_m2):
 
     poi_total = cell["poi_total"]
     road_length = cell["road_length_m"]
+
+    if cell_area_m2 > 0:
+        cell["water_area_m2"] = min(cell["water_area_m2"], cell_area_m2)
 
     cell["intersection_count"] = intersection_count
     cell["poi_density"] = poi_total / cell_area_km2 if cell_area_km2 > 0 else 0.0
@@ -690,6 +752,7 @@ def aggregate_cells(input_csv_path, resolution):
             cell = cells[cell_id]
             update_poi_mix(cell, category, name)
             update_streets(cell, category, geometry)
+            update_water_from_lines(cells, category, name, tags, geometry, resolution)
 
             area_allocations = distribute_polygon_area_across_cells(geometry, resolution)
             for area_cell_id, area in area_allocations.items():

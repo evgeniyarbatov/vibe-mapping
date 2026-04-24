@@ -350,6 +350,33 @@ class BuildAreaCellsTests(unittest.TestCase):
         self.assertTrue(builder.is_water_feature("Unknown", {"natural": "water"}))
         self.assertFalse(builder.is_water_feature("Unknown", {"natural": "wood"}))
 
+    def test_coastline_linestring_contributes_water_area(self):
+        coords = [[105.94, 19.86], [105.95, 19.87], [105.96, 19.875]]
+        rows = [
+            {
+                "name": "Unknown",
+                "geometry": json.dumps({"type": "LineString", "coordinates": coords}),
+                "category": builder.SCENIC_WATER_FOREST,
+                "type": '{"natural":"coastline"}',
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "input.csv"
+            with input_path.open("w", newline="", encoding="utf-8") as source:
+                writer = csv.DictWriter(source, fieldnames=["name", "geometry", "category", "type"])
+                writer.writeheader()
+                writer.writerows(rows)
+
+            cells = builder.aggregate_cells(str(input_path), resolution=8)
+
+        total_water_area = sum(features["water_area_m2"] for features in cells.values())
+        expected_water_area = builder.linestring_length_m(coords) * builder.COASTLINE_BAND_WIDTH_M
+        touched_cells = [features for features in cells.values() if features["water_area_m2"] > 0.0]
+
+        self.assertGreaterEqual(len(touched_cells), 2)
+        self.assertAlmostEqual(total_water_area, expected_water_area, delta=expected_water_area * 0.02)
+
 
 if __name__ == "__main__":
     unittest.main()

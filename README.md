@@ -93,6 +93,7 @@ Feature engineering includes:
 
 Polygon land areas are distributed across all overlapping H3 cells using polygon-cell overlap area (instead of assigning full polygon area to a single centroid cell).
 Water-vs-green detection for `Scenic / water / forest` now uses OSM tags from `type` first (with name-term fallback), including coastal tags like `natural=coastline` and `natural=beach`, which correctly handles unnamed sea-adjacent polygons.
+Coastline `LineString` features additionally contribute a coastal-water proxy area (length distributed across touched H3 cells times a fixed coastal band width), so sea-adjacent cells without explicit water polygons do not remain at zero `water_area_m2`.
 
 Scores include:
 - `busy`, `touristy`, `foodie`, `nightlife`, `green_quiet`,
