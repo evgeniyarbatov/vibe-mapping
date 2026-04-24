@@ -344,6 +344,12 @@ class BuildAreaCellsTests(unittest.TestCase):
             delta=expected_residential_area * 0.01,
         )
 
+    def test_is_water_feature_detects_coastal_tags(self):
+        self.assertTrue(builder.is_water_feature("Unknown", {"natural": "coastline"}))
+        self.assertTrue(builder.is_water_feature("Unknown", {"natural": "beach"}))
+        self.assertTrue(builder.is_water_feature("Unknown", {"natural": "water"}))
+        self.assertFalse(builder.is_water_feature("Unknown", {"natural": "wood"}))
+
 
 if __name__ == "__main__":
     unittest.main()

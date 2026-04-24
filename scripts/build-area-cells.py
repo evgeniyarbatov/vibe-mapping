@@ -58,11 +58,15 @@ WATER_NAME_TERMS = {
     "canal",
     "stream",
     "hồ",
+    "biển",
+    "vịnh",
     "sông",
 }
 
 WATER_NATURAL_VALUES = {
     "water",
+    "coastline",
+    "beach",
 }
 
 WATER_TAG_VALUES = {

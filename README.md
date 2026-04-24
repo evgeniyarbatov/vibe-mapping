@@ -92,7 +92,7 @@ Feature engineering includes:
 - Derived metrics (`poi_density`, `walkability_proxy`, `car_orientation`, `diversity`, etc.)
 
 Polygon land areas are distributed across all overlapping H3 cells using polygon-cell overlap area (instead of assigning full polygon area to a single centroid cell).
-Water-vs-green detection for `Scenic / water / forest` now uses OSM tags from `type` first (with name-term fallback), which correctly handles unnamed water bodies.
+Water-vs-green detection for `Scenic / water / forest` now uses OSM tags from `type` first (with name-term fallback), including coastal tags like `natural=coastline` and `natural=beach`, which correctly handles unnamed sea-adjacent polygons.
 
 Scores include:
 - `busy`, `touristy`, `foodie`, `nightlife`, `green_quiet`,
@@ -158,6 +158,7 @@ python scripts/build-area-points-kml.py \
 
 Main targets:
 - `make install`: create `.venv` and install `requirements.txt`
+- `make test`: run all tests in `tests/`
 - `make country`: download country `.osm.pbf` (Geofabrik URL in `Makefile`)
 - `make circle`: generate `osm/circle.poly`
 - `make area`: clip country extract to `osm/area.osm`
@@ -171,6 +172,7 @@ Main targets:
 Recommended run order:
 ```bash
 make install
+make test
 make country
 make area
 make points-normalized
