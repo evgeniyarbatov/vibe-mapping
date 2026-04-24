@@ -89,6 +89,7 @@ Feature engineering includes:
 - POI mix (`food_count`, `hotel_count`, `culture_count`, `parking_count`, etc.)
 - Land texture (`green_area_m2`, `water_area_m2`, `building_area_m2`, etc.)
 - Street structure (`road_length_m`, `major_road_length_m`, `footway_length_m`, intersections)
+  - `footway_length_m` counts only dedicated pedestrian highways (`highway=footway|pedestrian|steps`)
 - Derived metrics (`poi_density`, `walkability_proxy`, `car_orientation`, `diversity`, etc.)
 
 Polygon land areas are distributed across all overlapping H3 cells using polygon-cell overlap area (instead of assigning full polygon area to a single centroid cell).

@@ -42,9 +42,10 @@ ROAD_CATEGORIES = {
     LOCAL_SERVICES,
 }
 
-FOOTWAY_LIKE_CATEGORIES = {
-    WALKABLE_COMMERCIAL,
-    FAMILY_RESIDENTIAL,
+DEDICATED_FOOTWAY_HIGHWAYS = {
+    "footway",
+    "pedestrian",
+    "steps",
 }
 
 WATER_NAME_TERMS = {
@@ -585,7 +586,11 @@ def endpoint_key(lon, lat, precision=6):
     return f"{round(lon, precision):.{precision}f},{round(lat, precision):.{precision}f}"
 
 
-def update_streets(cell, category, geometry):
+def is_dedicated_footway(tags):
+    return tags.get("highway", "") in DEDICATED_FOOTWAY_HIGHWAYS
+
+
+def update_streets(cell, category, geometry, tags):
     if geometry.get("type") != "LineString":
         return
 
@@ -604,7 +609,7 @@ def update_streets(cell, category, geometry):
     if category == ROAD_HEAVY:
         cell["major_road_length_m"] += length
 
-    if category in FOOTWAY_LIKE_CATEGORIES:
+    if is_dedicated_footway(tags):
         cell["footway_length_m"] += length
 
 
@@ -751,7 +756,7 @@ def aggregate_cells(input_csv_path, resolution):
 
             cell = cells[cell_id]
             update_poi_mix(cell, category, name)
-            update_streets(cell, category, geometry)
+            update_streets(cell, category, geometry, tags)
             update_water_from_lines(cells, category, name, tags, geometry, resolution)
 
             area_allocations = distribute_polygon_area_across_cells(geometry, resolution)

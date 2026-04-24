@@ -98,6 +98,7 @@ class BuildAreaCellsTests(unittest.TestCase):
                     }
                 ),
                 "category": builder.ROAD_HEAVY,
+                "type": json.dumps({"highway": "primary"}),
             },
             {
                 "name": "Main Road B",
@@ -108,6 +109,18 @@ class BuildAreaCellsTests(unittest.TestCase):
                     }
                 ),
                 "category": builder.FAMILY_RESIDENTIAL,
+                "type": json.dumps({"highway": "residential"}),
+            },
+            {
+                "name": "Riverside Promenade",
+                "geometry": json.dumps(
+                    {
+                        "type": "LineString",
+                        "coordinates": [[105.0, 20.0002], [105.001, 20.0002]],
+                    }
+                ),
+                "category": builder.LOCAL_SERVICES,
+                "type": json.dumps({"highway": "footway"}),
             },
             {
                 "name": "Parking Plaza",
@@ -126,13 +139,14 @@ class BuildAreaCellsTests(unittest.TestCase):
                     }
                 ),
                 "category": builder.LOCAL_SERVICES,
+                "type": json.dumps({"amenity": "parking"}),
             },
         ]
 
         with tempfile.TemporaryDirectory() as temp_dir:
             input_path = Path(temp_dir) / "input.csv"
             with input_path.open("w", newline="", encoding="utf-8") as source:
-                writer = csv.DictWriter(source, fieldnames=["name", "geometry", "category"])
+                writer = csv.DictWriter(source, fieldnames=["name", "geometry", "category", "type"])
                 writer.writeheader()
                 writer.writerows(rows)
 
@@ -148,6 +162,37 @@ class BuildAreaCellsTests(unittest.TestCase):
             round(features["intersection_count"] + features["footway_length_m"] / 100.0, 6),
         )
         self.assertEqual(features["parking_count"], 1)
+
+    def test_aggregate_cells_counts_only_dedicated_footways(self):
+        residential_coords = [[105.0, 20.0], [105.001, 20.0]]
+        footway_coords = [[105.0, 20.0002], [105.001, 20.0002]]
+        rows = [
+            {
+                "name": "Neighborhood Road",
+                "geometry": json.dumps({"type": "LineString", "coordinates": residential_coords}),
+                "category": builder.FAMILY_RESIDENTIAL,
+                "type": json.dumps({"highway": "residential"}),
+            },
+            {
+                "name": "Dedicated Footway",
+                "geometry": json.dumps({"type": "LineString", "coordinates": footway_coords}),
+                "category": builder.LOCAL_SERVICES,
+                "type": json.dumps({"highway": "footway"}),
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "input.csv"
+            with input_path.open("w", newline="", encoding="utf-8") as source:
+                writer = csv.DictWriter(source, fieldnames=["name", "geometry", "category", "type"])
+                writer.writeheader()
+                writer.writerows(rows)
+
+            cells = builder.aggregate_cells(str(input_path), resolution=9)
+
+        expected_footway_length = builder.linestring_length_m(footway_coords)
+        total_footway_length = sum(features["footway_length_m"] for features in cells.values())
+        self.assertAlmostEqual(total_footway_length, expected_footway_length, places=4)
 
     def test_compute_scores_returns_zero_for_flat_dimensions(self):
         cells = {
