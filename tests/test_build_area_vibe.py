@@ -36,18 +36,20 @@ class FakeOllamaClient:
 class BuildAreaVibeTests(unittest.TestCase):
     def test_extract_vibe_prefers_json_vibe_field(self):
         self.assertEqual(
-            vibe_builder.extract_vibe('{"vibe":"Lively walkable market streets"}'),
-            "Lively walkable market streets",
+            vibe_builder.extract_vibe_and_label(
+                '{"vibe":"Lively walkable market streets","label":"positive"}'
+            ),
+            ("Lively walkable market streets", "positive"),
         )
 
     def test_extract_vibe_accepts_plain_text_fallback(self):
         self.assertEqual(
-            vibe_builder.extract_vibe("  Scenic and quiet  \nsecondary line"),
-            "Scenic and quiet",
+            vibe_builder.extract_vibe_and_label("  Scenic and quiet  \nsecondary line"),
+            ("Scenic and quiet", "mixed"),
         )
 
     def test_classify_cell_vibe_uses_ollama_response_content(self):
-        client = FakeOllamaClient('{"vibe":"Calm residential roads"}')
+        client = FakeOllamaClient('{"vibe":"Calm residential roads","label":"mixed"}')
 
         vibe = vibe_builder.classify_cell_vibe(
             client,
@@ -56,7 +58,7 @@ class BuildAreaVibeTests(unittest.TestCase):
             {"walkable": 0.2, "car_oriented": 0.4},
         )
 
-        self.assertEqual(vibe, "Calm residential roads")
+        self.assertEqual(vibe, ("Calm residential roads", "mixed"))
         self.assertEqual(client.calls[0]["model"], "mistral-nemo")
         self.assertEqual(client.calls[0]["response_format"], "json")
         user_message = client.calls[0]["messages"][1]["content"]
@@ -104,11 +106,12 @@ class BuildAreaVibeTests(unittest.TestCase):
 
         self.assertEqual(
             list(result_rows[0].keys()),
-            ["cell_id", "cell_boundary", "vibe"],
+            ["cell_id", "cell_boundary", "vibe", "label"],
         )
         self.assertEqual(result_rows[0]["cell_id"], "abc")
         self.assertEqual(result_rows[1]["cell_id"], "def")
         self.assertEqual(result_rows[0]["vibe"], "Balanced local services")
+        self.assertEqual(result_rows[0]["label"], "mixed")
         self.assertEqual(captured[0][0]["poi_total"], 3)
         self.assertEqual(captured[1][1]["car_oriented"], 0.6)
 
@@ -181,6 +184,19 @@ class BuildAreaVibeTests(unittest.TestCase):
         self.assertEqual(len(result_rows), 1)
         self.assertEqual(result_rows[0]["cell_id"], "abc")
         self.assertEqual(result_rows[0]["vibe"], "First-row vibe")
+        self.assertEqual(result_rows[0]["label"], "mixed")
+
+    def test_normalize_classification_result_accepts_multiple_shapes(self):
+        self.assertEqual(
+            vibe_builder.normalize_classification_result(
+                {"vibe": "Comfortable and lively sidewalks", "label": "good"}
+            ),
+            ("Comfortable and lively sidewalks", "positive"),
+        )
+        self.assertEqual(
+            vibe_builder.normalize_classification_result(("Noisy traffic corridor", "negative")),
+            ("Noisy traffic corridor", "negative"),
+        )
 
 
 if __name__ == "__main__":

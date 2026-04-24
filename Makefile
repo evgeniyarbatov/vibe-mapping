@@ -22,6 +22,7 @@ POINTS = osm/area-points.csv
 POINTS_NORMALIZED = osm/area-points-normalized.csv
 AREA_CELLS = osm/area-cells.csv
 AREA_VIBE = osm/area-vibe.csv
+AREA_VIBE_KML = osm/area-vibe.kml
 OLLAMA_MODEL = mistral-nemo
 OLLAMA_URL = http://127.0.0.1:11434
 
@@ -73,3 +74,8 @@ area-vibe: area-cells
 	--ollama-url $(OLLAMA_URL) \
 	$(AREA_CELLS) \
 	$(AREA_VIBE);
+
+area-vibe-kml: area-vibe
+	@$(PYTHON) scripts/build-area-vibe-kml.py \
+	$(AREA_VIBE) \
+	$(AREA_VIBE_KML);

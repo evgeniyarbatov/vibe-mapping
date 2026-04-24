@@ -13,18 +13,22 @@ DEFAULT_RETRIES = 2
 REQUIRED_COLUMNS = {"cell_id", "cell_boundary", "cell_features", "scores"}
 
 SYSTEM_PROMPT = (
-    "You analyze map-derived urban cell metrics and assign one concise vibe label.\n"
+    "You analyze map-derived urban cell metrics and describe how a pedestrian would feel "
+    "walking through the area.\n"
     "Use both the raw per-cell features and normalized scores.\n"
-    "Return strict JSON only, with one key: vibe."
+    "Return strict JSON only with keys: vibe and label."
 )
 
 USER_PROMPT_TEMPLATE = (
-    "Classify the overall vibe for this map cell.\n"
-    "Keep it short (2-6 words), concrete, and human-readable.\n"
-    "Use this JSON schema exactly: {{\"vibe\":\"...\"}}\n\n"
+    "Describe the walking experience vibe for this map cell.\n"
+    "The vibe must be descriptive and human, around 8-20 words.\n"
+    "Set label using exactly one of: positive, mixed, negative.\n"
+    "Use this JSON schema exactly: {{\"vibe\":\"...\",\"label\":\"positive|mixed|negative\"}}\n\n"
     "cell_features={cell_features}\n"
     "scores={scores}\n"
 )
+
+VALID_LABELS = {"positive", "mixed", "negative"}
 
 
 class OllamaClient:
@@ -67,13 +71,26 @@ def sanitize_vibe(vibe):
         cleaned = cleaned[:-1].strip()
     if not cleaned:
         return "Unclassified vibe"
-    return cleaned[:120]
+    return cleaned[:240]
 
 
-def extract_vibe(content):
+def normalize_label(label):
+    cleaned = str(label or "").strip().lower()
+    if cleaned in VALID_LABELS:
+        return cleaned
+
+    if cleaned in {"good", "pleasant", "upbeat", "vibrant", "safe", "lively"}:
+        return "positive"
+    if cleaned in {"bad", "harsh", "unpleasant", "unsafe", "bleak"}:
+        return "negative"
+
+    return "mixed"
+
+
+def extract_vibe_and_label(content):
     text = str(content or "").strip()
     if not text:
-        return "Unclassified vibe"
+        return "Unclassified vibe", "mixed"
 
     if text.startswith("```"):
         lines = [line for line in text.splitlines() if not line.startswith("```")]
@@ -81,13 +98,15 @@ def extract_vibe(content):
 
     try:
         payload = json.loads(text)
-        if isinstance(payload, dict) and isinstance(payload.get("vibe"), str):
-            return sanitize_vibe(payload["vibe"])
+        if isinstance(payload, dict):
+            vibe = sanitize_vibe(payload.get("vibe", payload.get("description", "")))
+            label = normalize_label(payload.get("label"))
+            return vibe, label
     except json.JSONDecodeError:
         pass
 
     first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
-    return sanitize_vibe(first_line)
+    return sanitize_vibe(first_line), "mixed"
 
 
 def build_prompt(cell_features, scores):
@@ -104,7 +123,7 @@ def classify_cell_vibe(ollama_client, model, cell_features, scores):
     ]
     response = ollama_client.chat(model=model, messages=messages, response_format="json")
     content = (response.get("message") or {}).get("content", "")
-    return extract_vibe(content)
+    return extract_vibe_and_label(content)
 
 
 def parse_json_column(cell_id, column_name, raw_json):
@@ -117,6 +136,14 @@ def parse_json_column(cell_id, column_name, raw_json):
     return parsed
 
 
+def normalize_classification_result(result):
+    if isinstance(result, dict):
+        return sanitize_vibe(result.get("vibe")), normalize_label(result.get("label"))
+    if isinstance(result, (list, tuple)) and len(result) >= 2:
+        return sanitize_vibe(result[0]), normalize_label(result[1])
+    return sanitize_vibe(result), "mixed"
+
+
 def build_area_vibe(input_csv_path, output_csv_path, classify_vibe_fn):
     output_path = Path(output_csv_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,7 +151,7 @@ def build_area_vibe(input_csv_path, output_csv_path, classify_vibe_fn):
     with open(input_csv_path, newline="", encoding="utf-8") as source, output_path.open(
         "w", newline="", encoding="utf-8"
     ) as target:
-        writer = csv.DictWriter(target, fieldnames=["cell_id", "cell_boundary", "vibe"])
+        writer = csv.DictWriter(target, fieldnames=["cell_id", "cell_boundary", "vibe", "label"])
         writer.writeheader()
         target.flush()
         reader = csv.DictReader(source)
@@ -139,12 +166,14 @@ def build_area_vibe(input_csv_path, output_csv_path, classify_vibe_fn):
             cell_features = parse_json_column(cell_id, "cell_features", row["cell_features"])
             scores = parse_json_column(cell_id, "scores", row["scores"])
 
-            vibe = classify_vibe_fn(cell_features, scores)
+            vibe_result = classify_vibe_fn(cell_features, scores)
+            vibe, label = normalize_classification_result(vibe_result)
             writer.writerow(
                 {
                     "cell_id": cell_id,
                     "cell_boundary": cell_boundary,
-                    "vibe": sanitize_vibe(vibe),
+                    "vibe": vibe,
+                    "label": label,
                 }
             )
             target.flush()
@@ -153,7 +182,7 @@ def build_area_vibe(input_csv_path, output_csv_path, classify_vibe_fn):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_csv", help="Input area cells CSV with cell_features and scores")
-    parser.add_argument("output_csv", help="Output CSV with cell_id,cell_boundary,vibe")
+    parser.add_argument("output_csv", help="Output CSV with cell_id,cell_boundary,vibe,label")
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Ollama model (default: {DEFAULT_MODEL})")
     parser.add_argument(
         "--ollama-url",

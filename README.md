@@ -14,5 +14,10 @@ Use `make points-normalized` to run it.
 Use `make area-cells` to run it.
 
 `scripts/build-area-vibe.py` reads `osm/area-cells.csv`, calls local Ollama (`mistral-nemo` by default), and writes:
-`osm/area-vibe.csv` with columns `cell_id`, `cell_boundary`, `vibe`.
+`osm/area-vibe.csv` with columns `cell_id`, `cell_boundary`, `vibe`, `label`.
+`vibe` is a descriptive pedestrian-feeling summary, and `label` is one of `positive`, `mixed`, `negative`.
 Use `make area-vibe` to run it.
+
+`scripts/build-area-vibe-kml.py` reads `osm/area-vibe.csv` and writes:
+`osm/area-vibe.kml` with colored area polygons and label points for each area.
+Use `make area-vibe-kml` to run it.
