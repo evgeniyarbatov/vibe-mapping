@@ -77,6 +77,9 @@ area-points-kml: points-normalized
 area-cells: points-normalized
 	@$(PYTHON) scripts/build-area-cells.py \
 	--resolution $(H3_RESOLUTION) \
+	--center-lat $(START_LAT) \
+	--center-lon $(START_LON) \
+	--radius-km $(RADIUS_KM) \
 	$(POINTS_NORMALIZED) \
 	$(AREA_CELLS);
 

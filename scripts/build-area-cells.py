@@ -82,6 +82,14 @@ def _h3_cell_area_m2(cell_id):
     return float(h3.cell_area(cell_id, unit="m2"))
 
 
+def _h3_cell_to_latlng(cell_id):
+    if hasattr(h3, "cell_to_latlng"):
+        lat, lng = h3.cell_to_latlng(cell_id)
+        return float(lat), float(lng)
+    lat, lng = h3.h3_to_geo(cell_id)
+    return float(lat), float(lng)
+
+
 def haversine_m(lat1, lon1, lat2, lon2):
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
@@ -413,6 +421,19 @@ def aggregate_cells(input_csv_path, resolution):
     return cells
 
 
+def filter_cells_by_center_radius(cells, center_lat, center_lon, radius_km):
+    if center_lat is None or center_lon is None or radius_km is None:
+        return dict(cells)
+
+    radius_m = radius_km * 1000.0
+    filtered_cells = {}
+    for cell_id, features in cells.items():
+        cell_lat, cell_lon = _h3_cell_to_latlng(cell_id)
+        if haversine_m(center_lat, center_lon, cell_lat, cell_lon) <= radius_m:
+            filtered_cells[cell_id] = features
+    return filtered_cells
+
+
 def write_cells_csv(output_csv_path, cells, scores):
     output_path = Path(output_csv_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -433,8 +454,16 @@ def write_cells_csv(output_csv_path, cells, scores):
             )
 
 
-def build_area_cells(input_csv_path, output_csv_path, resolution):
+def build_area_cells(
+    input_csv_path,
+    output_csv_path,
+    resolution,
+    center_lat=None,
+    center_lon=None,
+    radius_km=None,
+):
     cells = aggregate_cells(input_csv_path, resolution)
+    cells = filter_cells_by_center_radius(cells, center_lat, center_lon, radius_km)
     if not cells:
         write_cells_csv(output_csv_path, cells, {})
         return
@@ -447,9 +476,26 @@ def parse_args():
     parser.add_argument("input_csv", help="Normalized POI CSV (name,geometry,category)")
     parser.add_argument("output_csv", help="Output CSV with cell features and scores")
     parser.add_argument("--resolution", type=int, default=9, help="H3 resolution (default: 9)")
-    return parser.parse_args()
+    parser.add_argument("--center-lat", type=float, help="Center latitude for optional radius filter")
+    parser.add_argument("--center-lon", type=float, help="Center longitude for optional radius filter")
+    parser.add_argument("--radius-km", type=float, help="Max distance from center (km) for cell center")
+
+    args = parser.parse_args()
+    radius_filter_args = [args.center_lat is not None, args.center_lon is not None, args.radius_km is not None]
+    if any(radius_filter_args) and not all(radius_filter_args):
+        parser.error("--center-lat, --center-lon, and --radius-km must be provided together")
+    if args.radius_km is not None and args.radius_km < 0:
+        parser.error("--radius-km must be non-negative")
+    return args
 
 
 if __name__ == "__main__":
     args = parse_args()
-    build_area_cells(args.input_csv, args.output_csv, args.resolution)
+    build_area_cells(
+        args.input_csv,
+        args.output_csv,
+        args.resolution,
+        center_lat=args.center_lat,
+        center_lon=args.center_lon,
+        radius_km=args.radius_km,
+    )

@@ -203,6 +203,62 @@ class BuildAreaCellsTests(unittest.TestCase):
 
         self.assertEqual(result_rows, [])
 
+    def test_build_area_cells_filters_cells_by_center_radius(self):
+        rows = [
+            {
+                "name": "Near cafe",
+                "geometry": json.dumps(
+                    {
+                        "type": "LineString",
+                        "coordinates": [[105.0, 20.0], [105.001, 20.001]],
+                    }
+                ),
+                "category": builder.FOOD_AND_CAFE,
+            },
+            {
+                "name": "Far road",
+                "geometry": json.dumps(
+                    {
+                        "type": "LineString",
+                        "coordinates": [[105.1, 20.1], [105.101, 20.101]],
+                    }
+                ),
+                "category": builder.ROAD_HEAVY,
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "input.csv"
+            output_path = Path(temp_dir) / "output.csv"
+
+            with input_path.open("w", newline="", encoding="utf-8") as source:
+                writer = csv.DictWriter(source, fieldnames=["name", "geometry", "category"])
+                writer.writeheader()
+                writer.writerows(rows)
+
+            unfiltered_cells = builder.aggregate_cells(str(input_path), resolution=9)
+            self.assertGreaterEqual(len(unfiltered_cells), 2)
+
+            builder.build_area_cells(
+                str(input_path),
+                str(output_path),
+                resolution=9,
+                center_lat=20.0,
+                center_lon=105.0,
+                radius_km=1.0,
+            )
+
+            with output_path.open(newline="", encoding="utf-8") as output:
+                result_rows = list(csv.DictReader(output))
+
+        self.assertGreaterEqual(len(result_rows), 1)
+        self.assertLess(len(result_rows), len(unfiltered_cells))
+
+        for row in result_rows:
+            cell_lat, cell_lon = builder._h3_cell_to_latlng(row["cell_id"])
+            distance_km = builder.haversine_m(20.0, 105.0, cell_lat, cell_lon) / 1000.0
+            self.assertLessEqual(distance_km, 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

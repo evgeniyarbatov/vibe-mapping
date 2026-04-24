@@ -96,8 +96,15 @@ Scores include:
 
 Usage:
 ```bash
-python scripts/build-area-cells.py --resolution 9 <input_csv> <output_csv>
+python scripts/build-area-cells.py \
+  --resolution 9 \
+  --center-lat <start_lat> \
+  --center-lon <start_lon> \
+  --radius-km <radius_km> \
+  <input_csv> <output_csv>
 ```
+
+The center/radius flags are optional, but when provided together, only cells whose H3 cell center is within `radius_km` from the given center are kept.
 
 ### `scripts/build-area-vibe.py`
 Reads `area-cells.csv`, sends `cell_features` and `scores` to local Ollama chat API, and writes per-cell vibe text.
