@@ -14,7 +14,7 @@ The system is intentionally staged. Each stage writes an artifact that becomes t
 3. Category normalization: map raw OSM tags into a fixed vibe taxonomy.
 4. Cell aggregation: bucket features into H3 cells and compute engineered metrics and normalized scores.
 5. Vibe generation: call Ollama to convert numeric signals into short human-readable vibe text + sentiment label.
-6. Visualization: convert vibe cells into styled KML polygons.
+6. Visualization: convert normalized features and vibe cells into styled KML layers.
 
 ## Data Flow
 
@@ -24,6 +24,7 @@ The system is intentionally staged. Each stage writes an artifact that becomes t
 | Area OSM clip | `make area` (`osmconvert` + `osmium`) | `osm/area.osm` | OSM XML |
 | Raw points | `scripts/get-points.py` | `osm/area-points.csv` | `name`, `geometry`, `wikipedia_url`, `type` |
 | Normalized points | `scripts/normalize-area-points.py` | `osm/area-points-normalized.csv` | `name`, `geometry`, `category` |
+| Category KML map | `scripts/build-area-points-kml.py` | `osm/area-points.kml` | KML features styled by `category` |
 | Cell features + scores | `scripts/build-area-cells.py` | `osm/area-cells.csv` | `cell_id`, `cell_features` (JSON), `scores` (JSON), `cell_boundary` (GeoJSON Polygon JSON) |
 | Vibe text + label | `scripts/build-area-vibe.py` | `osm/area-vibe.csv` | `cell_id`, `cell_boundary`, `vibe`, `label` |
 | KML map | `scripts/build-area-vibe-kml.py` | `osm/area-vibe.kml` | KML polygons styled by `label` |
@@ -129,6 +130,19 @@ python scripts/build-area-vibe-kml.py \
   --area-cells-csv osm/area-cells.csv
 ```
 
+### `scripts/build-area-points-kml.py`
+Builds KML from `area-points-normalized.csv` and applies category-based colors so each feature category is visually distinct.
+
+- Supports GeoJSON `Point`, `LineString`, `Polygon`, `MultiPoint`, `MultiLineString`, and `MultiPolygon`.
+- Uses fixed colors for known normalized categories and deterministic fallback colors for unexpected category values.
+
+Usage:
+```bash
+python scripts/build-area-points-kml.py \
+  osm/area-points-normalized.csv \
+  osm/area-points.kml
+```
+
 ## Makefile Pipeline
 
 Main targets:
@@ -138,6 +152,7 @@ Main targets:
 - `make area`: clip country extract to `osm/area.osm`
 - `make points`: build `osm/area-points.csv`
 - `make points-normalized`: build normalized CSV
+- `make area-points-kml`: build category-colored feature KML
 - `make area-cells`: build H3 cell features + scores
 - `make area-vibe`: build LLM vibe CSV
 - `make area-vibe-kml`: build KML
@@ -148,6 +163,7 @@ make install
 make country
 make area
 make points-normalized
+make area-points-kml
 make area-cells
 make area-vibe
 make area-vibe-kml
