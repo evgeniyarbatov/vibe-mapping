@@ -8,11 +8,12 @@ OSM_URL = https://download.geofabrik.de/asia/vietnam-latest.osm.pbf
 COUNTRY_OSM_FILE = $$(basename $(OSM_URL))
 
 RADIUS_KM = 30
-# START_LAT = 19.843303820107394
-# START_LON = 105.93544337695647
-START_LAT = 20.9948665623132
-START_LON = 105.86777883150903
+H3_RESOLUTION = 8
 
+START_LAT = 19.843303820107394
+START_LON = 105.93544337695647
+# START_LAT = 20.9948665623132
+# START_LON = 105.86777883150903
 
 OSM_DIR = osm
 
@@ -59,5 +60,6 @@ points-normalized:
 
 area-cells:
 	@$(PYTHON) scripts/build-area-cells.py \
+	--resolution $(H3_RESOLUTION) \
 	$(POINTS_NORMALIZED) \
 	$(AREA_CELLS);
