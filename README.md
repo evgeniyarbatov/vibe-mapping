@@ -5,6 +5,12 @@
 - LLM-generated "walking vibe" summaries,
 - and a color-coded KML output for map viewing.
 
+## Example
+
+Google My Maps - [link](https://www.google.com/maps/d/u/0/edit?mid=1pV5Zj1CWguzwJkHu4UJhqCfgidr1cCg&usp=sharing)
+
+<img src="https://github.com/user-attachments/assets/5bdef217-d802-46d8-97a8-c362296c53d0" width="400" />
+
 ## Overall Design
 
 The system is intentionally staged. Each stage writes an artifact that becomes the contract for the next stage.
