@@ -4,9 +4,6 @@ import sys
 import osmium
 import pandas as pd
 
-# --- WIKIPEDIA EXTRACTION ---
-
-
 REQUESTED_TAG_KEYS = (
     "amenity",
     "shop",
@@ -20,23 +17,6 @@ REQUESTED_TAG_KEYS = (
     "historic",
     "cultural",
 )
-
-
-def get_wikipedia_url(tags):
-    """Get Wikipedia or Wikidata URL from OSM tags."""
-    # Check if POI has a wikipedia tag
-    if "wikipedia" in tags:
-        wiki_tag = tags["wikipedia"]
-        if ":" in wiki_tag:
-            lang, title = wiki_tag.split(":", 1)
-            return f"https://{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}"
-
-    # Check for wikidata tag
-    if "wikidata" in tags:
-        wikidata_id = tags["wikidata"]
-        return f"https://www.wikidata.org/wiki/{wikidata_id}"
-
-    return None
 
 
 def tags_to_dict(tags):
@@ -151,16 +131,15 @@ class WayHandler(osmium.SimpleHandler):
             return
 
         name = get_name(tag_map)
-        wiki_url = get_wikipedia_url(tag_map)
         type_details = extract_type_details(tag_map)
-        self.ways.append([name, way_nodes, wiki_url, type_details])
+        self.ways.append([name, way_nodes, type_details])
 
 
 # --- UTILITIES ---
 
 
 def write_csv(ways, filename):
-    df = pd.DataFrame(ways, columns=["name", "way_nodes", "wikipedia_url", "type_details"])
+    df = pd.DataFrame(ways, columns=["name", "way_nodes", "type_details"])
     # Keep unnamed areas (name == "Unknown") but continue removing ambiguous
     # duplicates among named places.
     unnamed_mask = df["name"] == "Unknown"
@@ -168,7 +147,7 @@ def write_csv(ways, filename):
     unnamed = df[unnamed_mask]
     df = pd.concat([named, unnamed], ignore_index=True)
 
-    output_columns = ["name", "geometry", "wikipedia_url", "type"]
+    output_columns = ["name", "geometry", "type"]
     if df.empty:
         pd.DataFrame(columns=output_columns).to_csv(filename, index=False)
         return
