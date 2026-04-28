@@ -28,7 +28,7 @@ The system is intentionally staged. Each stage writes an artifact that becomes t
 | --- | --- | --- | --- |
 | Circle polygon | `scripts/get-circle.py` | `osm/circle.poly` | OSM polygon file for clipping |
 | Area OSM clip | `make area` (`osmconvert` + `osmium`) | `osm/area.osm` | OSM XML |
-| Raw points | `scripts/get-points.py` | `osm/area-points.csv` | `name`, `geometry`, `wikipedia_url`, `type` |
+| Raw points | `scripts/get-points.py` | `osm/area-points.csv` | `name`, `geometry`, `type` |
 | Normalized points | `scripts/normalize-area-points.py` | `osm/area-points-normalized.csv` | `name`, `geometry`, `category`, `type` |
 | Category KML map | `scripts/build-area-points-kml.py` | `osm/area-points.kml` | KML features styled by `category` |
 | Cell features + scores | `scripts/build-area-cells.py` | `osm/area-cells.csv` | `cell_id`, `cell_features` (JSON), `scores` (JSON), `cell_boundary` (GeoJSON Polygon JSON) |

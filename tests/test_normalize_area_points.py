@@ -86,19 +86,16 @@ class NormalizeAreaPointsTests(unittest.TestCase):
             {
                 "name": "Neighborhood Road",
                 "geometry": '{"type":"LineString","coordinates":[[105.0,20.0],[105.1,20.1]]}',
-                "wikipedia_url": "",
                 "type": '{"highway":"residential"}',
             },
             {
                 "name": "Big Factory",
                 "geometry": '{"type":"Polygon","coordinates":[[[105.0,20.0],[105.1,20.0],[105.1,20.1],[105.0,20.0]]]}',
-                "wikipedia_url": "",
                 "type": '{"landuse":"industrial"}',
             },
             {
                 "name": "Lake View",
                 "geometry": '{"type":"Polygon","coordinates":[[[105.0,20.0],[105.1,20.0],[105.1,20.1],[105.0,20.0]]]}',
-                "wikipedia_url": "",
                 "type": '{"natural":"water","water":"lake"}',
             },
         ]
@@ -110,7 +107,7 @@ class NormalizeAreaPointsTests(unittest.TestCase):
             with open(source_path, "w", newline="", encoding="utf-8") as source:
                 writer = csv.DictWriter(
                     source,
-                    fieldnames=["name", "geometry", "wikipedia_url", "type"],
+                    fieldnames=["name", "geometry", "type"],
                 )
                 writer.writeheader()
                 writer.writerows(rows)

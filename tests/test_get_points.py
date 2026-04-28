@@ -56,13 +56,11 @@ class GetPointsTests(unittest.TestCase):
             [
                 "City Park",
                 [(10.0, 20.0), (10.0, 21.0), (11.0, 21.0), (10.0, 20.0)],
-                "https://en.wikipedia.org/wiki/City_park",
                 {"leisure": "park", "tourism": "attraction"},
             ],
             [
                 "Main Street",
                 [(10.0, 20.0), (10.5, 20.5), (11.0, 21.0)],
-                "",
                 {"highway": "residential"},
             ],
         ]
@@ -97,25 +95,21 @@ class GetPointsTests(unittest.TestCase):
             [
                 "Unknown",
                 [(10.0, 20.0), (10.2, 20.2), (10.4, 20.4)],
-                "",
                 {"natural": "wood"},
             ],
             [
                 "Unknown",
                 [(11.0, 21.0), (11.2, 21.2), (11.4, 21.4)],
-                "",
                 {"natural": "beach"},
             ],
             [
                 "Duplicate Name",
                 [(12.0, 22.0), (12.2, 22.2), (12.4, 22.4)],
-                "",
                 {"tourism": "attraction"},
             ],
             [
                 "Duplicate Name",
                 [(13.0, 23.0), (13.2, 23.2), (13.4, 23.4)],
-                "",
                 {"tourism": "attraction"},
             ],
         ]
