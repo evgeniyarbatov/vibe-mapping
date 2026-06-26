@@ -5,7 +5,7 @@ PIP := $(VENV_PATH)/bin/pip
 REQUIREMENTS := requirements.txt
 
 OSM_URL = https://download.geofabrik.de/asia/vietnam-latest.osm.pbf
-COUNTRY_OSM_FILE = $$(basename $(OSM_URL))
+include $(HOME)/gitRepo/dotfiles/make/osm-country.mk
 
 RADIUS_KM = 5
 H3_RESOLUTION = 8
@@ -42,10 +42,6 @@ install: venv
 test:
 	@$(PYTHON) -m unittest discover -s tests -p 'test_*.py'
 
-country:
-	if [ ! -f $(OSM_DIR)/$(COUNTRY_OSM_FILE) ]; then \
-		wget $(OSM_URL) -P $(OSM_DIR); \
-	fi
 
 circle:
 	@$(PYTHON) scripts/get-circle.py \
