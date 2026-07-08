@@ -33,11 +33,10 @@ OLLAMA_URL = http://127.0.0.1:11434
 .PHONY: venv install test country circle area points points-normalized area-points-kml area-cells area-vibe area-vibe-kml
 
 venv:
-	@python3 -m venv $(VENV_PATH)
+	@uv venv $(VENV_PATH)
 
 install: venv
-	@$(PIP) install --disable-pip-version-check -q --upgrade pip
-	@$(PIP) install --disable-pip-version-check -q -r $(REQUIREMENTS)
+	@uv pip install -q -r $(REQUIREMENTS)
 
 test:
 	@$(PYTHON) -m unittest discover -s tests -p 'test_*.py'
