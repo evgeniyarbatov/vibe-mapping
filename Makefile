@@ -38,17 +38,14 @@ venv:
 install: venv
 	@uv pip install -q -r $(REQUIREMENTS)
 
-test:
+test: install
 	@$(PYTHON) -m unittest discover -s tests -p 'test_*.py'
-
-
-circle:
+circle: install
 	@$(PYTHON) scripts/get-circle.py \
 	$(START_LAT) \
 	$(START_LON) \
 	$(RADIUS_KM) \
 	$(CIRCLE);
-
 area: circle
 	@osmconvert $(OSM_DIR)/$(COUNTRY_OSM_FILE) \
 		-B=$(CIRCLE) \
@@ -57,24 +54,21 @@ area: circle
 		-o=$(OSM_DIR)/area.osm.pbf
 	@osmium cat --overwrite $(OSM_DIR)/area.osm.pbf -o $(OSM_DIR)/area.osm
 
-points: area
+points: install area
 	@$(PYTHON) scripts/get-points.py \
 	$(START_LAT) \
 	$(START_LON) \
 	$(OSM_DIR)/area.osm \
 	$(POINTS);
-
-points-normalized: points
+points-normalized: install points
 	@$(PYTHON) scripts/normalize-area-points.py \
 	$(POINTS) \
 	$(POINTS_NORMALIZED);
-
-area-points-kml: points-normalized
+area-points-kml: install points-normalized
 	@$(PYTHON) scripts/build-area-points-kml.py \
 	$(POINTS_NORMALIZED) \
 	$(AREA_POINTS_KML);
-
-area-cells: points-normalized
+area-cells: install points-normalized
 	@$(PYTHON) scripts/build-area-cells.py \
 	--resolution $(H3_RESOLUTION) \
 	--center-lat $(START_LAT) \
@@ -82,15 +76,13 @@ area-cells: points-normalized
 	--radius-km $(RADIUS_KM) \
 	$(POINTS_NORMALIZED) \
 	$(AREA_CELLS);
-
-area-vibe:
+area-vibe: install
 	@$(PYTHON) scripts/build-area-vibe.py \
 	--model $(OLLAMA_MODEL) \
 	--ollama-url $(OLLAMA_URL) \
 	$(AREA_CELLS) \
 	$(AREA_VIBE);
-
-area-vibe-kml:
+area-vibe-kml: install
 	@$(PYTHON) scripts/build-area-vibe-kml.py \
 	$(AREA_VIBE) \
 	$(AREA_VIBE_KML);
