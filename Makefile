@@ -1,8 +1,4 @@
-VENV_PATH := .venv
-
-PYTHON := $(VENV_PATH)/bin/python
-PIP := $(VENV_PATH)/bin/pip
-REQUIREMENTS := requirements.txt
+# Uses uv (https://docs.astral.sh/uv) for dependency management — uv sync creates/updates .venv; run commands via uv run, no manual activation.
 
 OSM_URL = https://download.geofabrik.de/asia/vietnam-latest.osm.pbf
 include $(HOME)/gitRepo/dotfiles/make/osm-country.mk
@@ -30,22 +26,21 @@ AREA_VIBE_KML = osm/area-vibe.kml
 OLLAMA_MODEL = mistral-nemo
 OLLAMA_URL = http://127.0.0.1:11434
 
-.PHONY: venv install test country circle area points points-normalized area-points-kml area-cells area-vibe area-vibe-kml
+.PHONY: help install test country circle area points points-normalized area-points-kml area-cells area-vibe area-vibe-kml lock
 
-venv:
-	@uv venv $(VENV_PATH)
-
-install: venv
-	@uv pip install -q -r $(REQUIREMENTS)
+install:
+	@uv sync
 
 test: install
-	@$(PYTHON) -m unittest discover -s tests -p 'test_*.py'
+	@uv run python -m unittest discover -s tests -p 'test_*.py'
+
 circle: install
-	@$(PYTHON) scripts/get-circle.py \
+	@uv run python scripts/get-circle.py \
 	$(START_LAT) \
 	$(START_LON) \
 	$(RADIUS_KM) \
 	$(CIRCLE);
+
 area: circle
 	@osmconvert $(OSM_DIR)/$(COUNTRY_OSM_FILE) \
 		-B=$(CIRCLE) \
@@ -55,34 +50,55 @@ area: circle
 	@osmium cat --overwrite $(OSM_DIR)/area.osm.pbf -o $(OSM_DIR)/area.osm
 
 points: install area
-	@$(PYTHON) scripts/get-points.py \
+	@uv run python scripts/get-points.py \
 	$(START_LAT) \
 	$(START_LON) \
 	$(OSM_DIR)/area.osm \
 	$(POINTS);
+
 points-normalized: install points
-	@$(PYTHON) scripts/normalize-area-points.py \
+	@uv run python scripts/normalize-area-points.py \
 	$(POINTS) \
 	$(POINTS_NORMALIZED);
+
 area-points-kml: install points-normalized
-	@$(PYTHON) scripts/build-area-points-kml.py \
+	@uv run python scripts/build-area-points-kml.py \
 	$(POINTS_NORMALIZED) \
 	$(AREA_POINTS_KML);
+
 area-cells: install points-normalized
-	@$(PYTHON) scripts/build-area-cells.py \
+	@uv run python scripts/build-area-cells.py \
 	--resolution $(H3_RESOLUTION) \
 	--center-lat $(START_LAT) \
 	--center-lon $(START_LON) \
 	--radius-km $(RADIUS_KM) \
 	$(POINTS_NORMALIZED) \
 	$(AREA_CELLS);
+
 area-vibe: install
-	@$(PYTHON) scripts/build-area-vibe.py \
+	@uv run python scripts/build-area-vibe.py \
 	--model $(OLLAMA_MODEL) \
 	--ollama-url $(OLLAMA_URL) \
 	$(AREA_CELLS) \
 	$(AREA_VIBE);
+
 area-vibe-kml: install
-	@$(PYTHON) scripts/build-area-vibe-kml.py \
+	@uv run python scripts/build-area-vibe-kml.py \
 	$(AREA_VIBE) \
 	$(AREA_VIBE_KML);
+
+lock:
+	@uv lock
+
+help:
+	@echo "install           - uv sync"
+	@echo "test              - run unit tests"
+	@echo "circle            - generate search circle polygon"
+	@echo "area              - extract OSM area"
+	@echo "points            - extract points from area"
+	@echo "points-normalized - normalize area points"
+	@echo "area-points-kml   - build KML from points"
+	@echo "area-cells        - build H3 cells from points"
+	@echo "area-vibe         - classify area vibe via ollama"
+	@echo "area-vibe-kml     - build KML from vibe cells"
+	@echo "lock              - uv lock"
