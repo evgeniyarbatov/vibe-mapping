@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-
 KML_NS = "http://www.opengis.net/kml/2.2"
 REQUIRED_COLUMNS = {"cell_id", "cell_boundary", "vibe", "label"}
 AREA_CELLS_REQUIRED_COLUMNS = {"cell_id", "cell_features", "scores"}
@@ -99,7 +98,9 @@ def parse_polygons(cell_id, raw_boundary):
     elif geometry_type == "MultiPolygon":
         raw_polygons = coordinates
     else:
-        raise ValueError(f"Cell {cell_id}: unsupported geometry type in cell_boundary: {geometry_type}")
+        raise ValueError(
+            f"Cell {cell_id}: unsupported geometry type in cell_boundary: {geometry_type}"
+        )
 
     if not isinstance(raw_polygons, list) or not raw_polygons:
         raise ValueError(f"Cell {cell_id}: missing polygon coordinates in cell_boundary")
@@ -233,7 +234,9 @@ def add_area_placemark(document, row, style):
         add_polygon(multi_geometry, polygon)
 
 
-def build_area_vibe_kml(input_csv_path, output_kml_path, area_cells_csv_path=DEFAULT_AREA_CELLS_CSV):
+def build_area_vibe_kml(
+    input_csv_path, output_kml_path, area_cells_csv_path=DEFAULT_AREA_CELLS_CSV
+):
     cell_details = read_area_cells_details(area_cells_csv_path)
     rows = read_area_vibe_rows(input_csv_path, cell_details)
     styles = build_label_styles(rows)
@@ -261,7 +264,9 @@ def build_area_vibe_kml(input_csv_path, output_kml_path, area_cells_csv_path=DEF
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("input_csv", help="Input CSV with columns: cell_id, cell_boundary, vibe, label")
+    parser.add_argument(
+        "input_csv", help="Input CSV with columns: cell_id, cell_boundary, vibe, label"
+    )
     parser.add_argument("output_kml", help="Output KML path")
     parser.add_argument(
         "--area-cells-csv",

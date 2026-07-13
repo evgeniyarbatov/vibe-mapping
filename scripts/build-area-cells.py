@@ -7,7 +7,6 @@ from pathlib import Path
 
 import h3
 
-
 FOOD_AND_CAFE = "Food & café"
 NIGHTLIFE = "Nightlife"
 TOURIST_LODGING = "Tourist lodging"
@@ -155,7 +154,7 @@ def polygon_area_m2(ring):
         projected.append(projected[0])
 
     area = 0.0
-    for (x1, y1), (x2, y2) in zip(projected, projected[1:]):
+    for (x1, y1), (x2, y2) in zip(projected, projected[1:], strict=False):
         area += x1 * y2 - x2 * y1
     return abs(area) * 0.5
 
@@ -239,7 +238,7 @@ def _polygon_signed_area_xy(points):
     if len(points) < 3:
         return 0.0
     area = 0.0
-    for (x1, y1), (x2, y2) in zip(points, points[1:] + [points[0]]):
+    for (x1, y1), (x2, y2) in zip(points, points[1:] + [points[0]], strict=False):
         area += x1 * y2 - x2 * y1
     return area / 2.0
 
@@ -276,7 +275,9 @@ def _clip_polygon_with_convex(subject_polygon, clip_polygon):
     output = list(subject_polygon)
     orientation = 1.0 if _polygon_signed_area_xy(clip_polygon) >= 0.0 else -1.0
 
-    for edge_start, edge_end in zip(clip_polygon, clip_polygon[1:] + [clip_polygon[0]]):
+    for edge_start, edge_end in zip(
+        clip_polygon, clip_polygon[1:] + [clip_polygon[0]], strict=False
+    ):
         input_points = output
         output = []
         if not input_points:
@@ -386,7 +387,7 @@ def linestring_length_m(coords):
         return 0.0
 
     length = 0.0
-    for (lon1, lat1), (lon2, lat2) in zip(coords, coords[1:]):
+    for (lon1, lat1), (lon2, lat2) in zip(coords, coords[1:], strict=False):
         length += haversine_m(lat1, lon1, lat2, lon2)
     return length
 
@@ -396,7 +397,7 @@ def distribute_linestring_length_across_cells(coords, resolution):
         return {}
 
     allocations = defaultdict(float)
-    for (lon1, lat1), (lon2, lat2) in zip(coords, coords[1:]):
+    for (lon1, lat1), (lon2, lat2) in zip(coords, coords[1:], strict=False):
         segment_length = haversine_m(lat1, lon1, lat2, lon2)
         if segment_length <= 0.0:
             continue
@@ -799,7 +800,9 @@ def write_cells_csv(output_csv_path, cells, scores):
                     "cell_id": cell_id,
                     "cell_features": json.dumps(cells[cell_id], sort_keys=True),
                     "scores": json.dumps(scores[cell_id], sort_keys=True),
-                    "cell_boundary": json.dumps(cell_boundary_geojson(cell_id), separators=(",", ":")),
+                    "cell_boundary": json.dumps(
+                        cell_boundary_geojson(cell_id), separators=(",", ":")
+                    ),
                 }
             )
 
@@ -826,12 +829,22 @@ def parse_args():
     parser.add_argument("input_csv", help="Normalized POI CSV (name,geometry,category)")
     parser.add_argument("output_csv", help="Output CSV with cell features and scores")
     parser.add_argument("--resolution", type=int, default=9, help="H3 resolution (default: 9)")
-    parser.add_argument("--center-lat", type=float, help="Center latitude for optional radius filter")
-    parser.add_argument("--center-lon", type=float, help="Center longitude for optional radius filter")
-    parser.add_argument("--radius-km", type=float, help="Max distance from center (km) for cell center")
+    parser.add_argument(
+        "--center-lat", type=float, help="Center latitude for optional radius filter"
+    )
+    parser.add_argument(
+        "--center-lon", type=float, help="Center longitude for optional radius filter"
+    )
+    parser.add_argument(
+        "--radius-km", type=float, help="Max distance from center (km) for cell center"
+    )
 
     args = parser.parse_args()
-    radius_filter_args = [args.center_lat is not None, args.center_lon is not None, args.radius_km is not None]
+    radius_filter_args = [
+        args.center_lat is not None,
+        args.center_lon is not None,
+        args.radius_km is not None,
+    ]
     if any(radius_filter_args) and not all(radius_filter_args):
         parser.error("--center-lat, --center-lon, and --radius-km must be provided together")
     if args.radius_km is not None and args.radius_km < 0:

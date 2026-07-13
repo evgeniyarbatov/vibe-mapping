@@ -62,7 +62,8 @@ def is_cultural_site(tags):
     return (
         tags.get("tourism")
         in {"museum", "gallery", "artwork", "attraction", "viewpoint", "information"}
-        or tags.get("historic") in {"monument", "memorial", "archaeological_site", "castle", "ruins"}
+        or tags.get("historic")
+        in {"monument", "memorial", "archaeological_site", "castle", "ruins"}
         or tags.get("amenity") in {"theatre", "arts_centre", "cinema"}
         or tags.get("cultural") is not None
     )

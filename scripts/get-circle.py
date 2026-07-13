@@ -15,9 +15,7 @@ def generate_circle_poly(
     for i in range(NUMBER_OF_POINTS):
         bearing = 360 * i / NUMBER_OF_POINTS
 
-        destination = geodesic(kilometers=float(radius_km)).destination(
-            (lat, lon), bearing
-        )
+        destination = geodesic(kilometers=float(radius_km)).destination((lat, lon), bearing)
         point_lon, point_lat = destination.longitude, destination.latitude
         points.append((point_lon, point_lat))
 
