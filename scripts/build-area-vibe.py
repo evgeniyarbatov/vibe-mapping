@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from urllib import error, request
 
-
 DEFAULT_MODEL = "mistral-nemo"
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 DEFAULT_TIMEOUT_SECONDS = 120
@@ -179,9 +178,10 @@ def build_area_vibe(input_csv_path, output_csv_path, classify_vibe_fn):
     output_path = Path(output_csv_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(input_csv_path, newline="", encoding="utf-8") as source, output_path.open(
-        "w", newline="", encoding="utf-8"
-    ) as target:
+    with (
+        open(input_csv_path, newline="", encoding="utf-8") as source,
+        output_path.open("w", newline="", encoding="utf-8") as target,
+    ):
         writer = csv.DictWriter(target, fieldnames=["cell_id", "cell_boundary", "vibe", "label"])
         writer.writeheader()
         target.flush()
@@ -214,7 +214,9 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_csv", help="Input area cells CSV with cell_features and scores")
     parser.add_argument("output_csv", help="Output CSV with cell_id,cell_boundary,vibe,label")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Ollama model (default: {DEFAULT_MODEL})")
+    parser.add_argument(
+        "--model", default=DEFAULT_MODEL, help=f"Ollama model (default: {DEFAULT_MODEL})"
+    )
     parser.add_argument(
         "--ollama-url",
         default=DEFAULT_OLLAMA_URL,
@@ -241,5 +243,7 @@ if __name__ == "__main__":
     build_area_vibe(
         args.input_csv,
         args.output_csv,
-        lambda cell_features, scores: classify_cell_vibe(client, args.model, cell_features, scores),
+        lambda cell_features, scores: classify_cell_vibe(
+            client, args.model, cell_features, scores
+        ),
     )

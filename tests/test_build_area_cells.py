@@ -75,7 +75,9 @@ class BuildAreaCellsTests(unittest.TestCase):
             with output_path.open(newline="", encoding="utf-8") as output:
                 result_rows = list(csv.DictReader(output))
 
-        self.assertEqual(list(result_rows[0].keys()), ["cell_id", "cell_features", "scores", "cell_boundary"])
+        self.assertEqual(
+            list(result_rows[0].keys()), ["cell_id", "cell_features", "scores", "cell_boundary"]
+        )
         self.assertGreaterEqual(len(result_rows), 1)
 
         features = json.loads(result_rows[0]["cell_features"])
@@ -146,7 +148,9 @@ class BuildAreaCellsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             input_path = Path(temp_dir) / "input.csv"
             with input_path.open("w", newline="", encoding="utf-8") as source:
-                writer = csv.DictWriter(source, fieldnames=["name", "geometry", "category", "type"])
+                writer = csv.DictWriter(
+                    source, fieldnames=["name", "geometry", "category", "type"]
+                )
                 writer.writeheader()
                 writer.writerows(rows)
 
@@ -184,7 +188,9 @@ class BuildAreaCellsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             input_path = Path(temp_dir) / "input.csv"
             with input_path.open("w", newline="", encoding="utf-8") as source:
-                writer = csv.DictWriter(source, fieldnames=["name", "geometry", "category", "type"])
+                writer = csv.DictWriter(
+                    source, fieldnames=["name", "geometry", "category", "type"]
+                )
                 writer.writeheader()
                 writer.writerows(rows)
 
@@ -351,7 +357,9 @@ class BuildAreaCellsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             input_path = Path(temp_dir) / "input.csv"
             with input_path.open("w", newline="", encoding="utf-8") as source:
-                writer = csv.DictWriter(source, fieldnames=["name", "geometry", "category", "type"])
+                writer = csv.DictWriter(
+                    source, fieldnames=["name", "geometry", "category", "type"]
+                )
                 writer.writeheader()
                 writer.writerows(rows)
 
@@ -365,19 +373,27 @@ class BuildAreaCellsTests(unittest.TestCase):
 
         total_water_area = sum(features["water_area_m2"] for features in cells.values())
         total_green_area = sum(features["green_area_m2"] for features in cells.values())
-        total_residential_area = sum(features["residential_area_m2"] for features in cells.values())
+        total_residential_area = sum(
+            features["residential_area_m2"] for features in cells.values()
+        )
         total_building_area = sum(features["building_area_m2"] for features in cells.values())
 
         water_cells = [features for features in cells.values() if features["water_area_m2"] > 0]
         green_cells = [features for features in cells.values() if features["green_area_m2"] > 0]
-        residential_cells = [features for features in cells.values() if features["residential_area_m2"] > 0]
+        residential_cells = [
+            features for features in cells.values() if features["residential_area_m2"] > 0
+        ]
 
         self.assertGreater(len(water_cells), 1)
         self.assertGreater(len(green_cells), 1)
         self.assertGreater(len(residential_cells), 1)
 
-        self.assertAlmostEqual(total_water_area, expected_water_area, delta=expected_water_area * 0.01)
-        self.assertAlmostEqual(total_green_area, expected_green_area, delta=expected_green_area * 0.01)
+        self.assertAlmostEqual(
+            total_water_area, expected_water_area, delta=expected_water_area * 0.01
+        )
+        self.assertAlmostEqual(
+            total_green_area, expected_green_area, delta=expected_green_area * 0.01
+        )
         self.assertAlmostEqual(
             total_residential_area,
             expected_residential_area,
@@ -409,7 +425,9 @@ class BuildAreaCellsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             input_path = Path(temp_dir) / "input.csv"
             with input_path.open("w", newline="", encoding="utf-8") as source:
-                writer = csv.DictWriter(source, fieldnames=["name", "geometry", "category", "type"])
+                writer = csv.DictWriter(
+                    source, fieldnames=["name", "geometry", "category", "type"]
+                )
                 writer.writeheader()
                 writer.writerows(rows)
 
@@ -417,10 +435,14 @@ class BuildAreaCellsTests(unittest.TestCase):
 
         total_water_area = sum(features["water_area_m2"] for features in cells.values())
         expected_water_area = builder.linestring_length_m(coords) * builder.COASTLINE_BAND_WIDTH_M
-        touched_cells = [features for features in cells.values() if features["water_area_m2"] > 0.0]
+        touched_cells = [
+            features for features in cells.values() if features["water_area_m2"] > 0.0
+        ]
 
         self.assertGreaterEqual(len(touched_cells), 2)
-        self.assertAlmostEqual(total_water_area, expected_water_area, delta=expected_water_area * 0.02)
+        self.assertAlmostEqual(
+            total_water_area, expected_water_area, delta=expected_water_area * 0.02
+        )
 
 
 if __name__ == "__main__":

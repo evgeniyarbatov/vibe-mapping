@@ -128,7 +128,11 @@ class NormalizeAreaPointsTests(unittest.TestCase):
         )
         self.assertEqual(
             [row["type"] for row in normalized_rows],
-            ['{"highway":"residential"}', '{"landuse":"industrial"}', '{"natural":"water","water":"lake"}'],
+            [
+                '{"highway":"residential"}',
+                '{"landuse":"industrial"}',
+                '{"natural":"water","water":"lake"}',
+            ],
         )
 
 

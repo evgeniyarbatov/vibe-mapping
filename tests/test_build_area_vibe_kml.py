@@ -5,7 +5,6 @@ import unittest
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-
 KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
 
 
@@ -77,7 +76,9 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
             self.write_csv(input_path, ["cell_id", "cell_boundary", "vibe", "label"], vibe_rows)
             self.write_area_cells_csv(area_cells_path, area_cell_rows)
 
-            kml_builder.build_area_vibe_kml(str(input_path), str(output_path), str(area_cells_path))
+            kml_builder.build_area_vibe_kml(
+                str(input_path), str(output_path), str(area_cells_path)
+            )
 
             tree = ET.parse(output_path)
             placemarks = tree.findall(".//kml:Placemark", namespaces=KML_NS)
@@ -93,7 +94,8 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
             self.assertEqual(len(area_placemarks), 3)
 
             area_style_urls = [
-                placemark.find("kml:styleUrl", namespaces=KML_NS).text for placemark in area_placemarks
+                placemark.find("kml:styleUrl", namespaces=KML_NS).text
+                for placemark in area_placemarks
             ]
             self.assertEqual(len(set(area_style_urls)), 2)
             self.assertIn("#area-label-positive", area_style_urls)
@@ -102,7 +104,8 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
             cell_a_description = next(
                 placemark.find("kml:description", namespaces=KML_NS).text
                 for placemark in placemarks
-                if placemark.find("kml:name", namespaces=KML_NS).text == "Quiet Industrial (cell-a)"
+                if placemark.find("kml:name", namespaces=KML_NS).text
+                == "Quiet Industrial (cell-a)"
             )
             self.assertIn("Area cell-a", cell_a_description)
             self.assertIn("Cell Features:", cell_a_description)
@@ -134,7 +137,9 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
             self.write_csv(input_path, ["cell_id", "cell_boundary", "vibe", "label"], vibe_rows)
             self.write_area_cells_csv(area_cells_path, area_cell_rows)
 
-            kml_builder.build_area_vibe_kml(str(input_path), str(output_path), str(area_cells_path))
+            kml_builder.build_area_vibe_kml(
+                str(input_path), str(output_path), str(area_cells_path)
+            )
             tree = ET.parse(output_path)
 
             area_style_url = tree.find(".//kml:Placemark/kml:styleUrl", namespaces=KML_NS).text
@@ -167,7 +172,9 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
             self.write_area_cells_csv(area_cells_path, area_cell_rows)
 
             with self.assertRaisesRegex(ValueError, "Missing required columns: label"):
-                kml_builder.build_area_vibe_kml(str(input_path), str(output_path), str(area_cells_path))
+                kml_builder.build_area_vibe_kml(
+                    str(input_path), str(output_path), str(area_cells_path)
+                )
 
     def test_build_area_vibe_kml_rejects_invalid_boundary_json(self):
         vibe_rows = [
@@ -194,7 +201,9 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
             self.write_area_cells_csv(area_cells_path, area_cell_rows)
 
             with self.assertRaisesRegex(ValueError, "invalid JSON in cell_boundary"):
-                kml_builder.build_area_vibe_kml(str(input_path), str(output_path), str(area_cells_path))
+                kml_builder.build_area_vibe_kml(
+                    str(input_path), str(output_path), str(area_cells_path)
+                )
 
     def test_build_area_vibe_kml_uses_empty_details_when_area_cell_missing(self):
         vibe_rows = [
@@ -220,7 +229,9 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
             self.write_csv(input_path, ["cell_id", "cell_boundary", "vibe", "label"], vibe_rows)
             self.write_area_cells_csv(area_cells_path, area_cell_rows)
 
-            kml_builder.build_area_vibe_kml(str(input_path), str(output_path), str(area_cells_path))
+            kml_builder.build_area_vibe_kml(
+                str(input_path), str(output_path), str(area_cells_path)
+            )
             tree = ET.parse(output_path)
             description = tree.find(".//kml:Placemark/kml:description", namespaces=KML_NS).text
             self.assertIn("Cell Features:\n{}", description)

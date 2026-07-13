@@ -5,7 +5,6 @@ import unittest
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-
 KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
 
 

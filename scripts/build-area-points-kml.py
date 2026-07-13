@@ -6,7 +6,6 @@ import re
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-
 KML_NS = "http://www.opengis.net/kml/2.2"
 REQUIRED_COLUMNS = {"name", "geometry", "category"}
 DEFAULT_INPUT_CSV = "osm/area-points-normalized.csv"
@@ -101,7 +100,9 @@ def format_coordinates(coordinates):
 
 def add_point(parent, point):
     point_element = ET.SubElement(parent, f"{{{KML_NS}}}Point")
-    ET.SubElement(point_element, f"{{{KML_NS}}}coordinates").text = f"{point[0]:.8f},{point[1]:.8f},0"
+    ET.SubElement(
+        point_element, f"{{{KML_NS}}}coordinates"
+    ).text = f"{point[0]:.8f},{point[1]:.8f},0"
 
 
 def add_linestring(parent, coordinates):
@@ -116,7 +117,9 @@ def add_polygon(parent, polygon):
 
     outer_boundary = ET.SubElement(polygon_element, f"{{{KML_NS}}}outerBoundaryIs")
     outer_ring = ET.SubElement(outer_boundary, f"{{{KML_NS}}}LinearRing")
-    ET.SubElement(outer_ring, f"{{{KML_NS}}}coordinates").text = format_coordinates(polygon["outer"])
+    ET.SubElement(outer_ring, f"{{{KML_NS}}}coordinates").text = format_coordinates(
+        polygon["outer"]
+    )
 
     for inner in polygon["inners"]:
         inner_boundary = ET.SubElement(polygon_element, f"{{{KML_NS}}}innerBoundaryIs")
@@ -178,7 +181,14 @@ def read_rows(input_csv_path):
                 name = f"Unnamed feature {row_number - 1}"
 
             category = sanitize_category(row.get("category"))
-            rows.append({"name": name, "category": category, "geometry": geometry, "row_number": row_number})
+            rows.append(
+                {
+                    "name": name,
+                    "category": category,
+                    "geometry": geometry,
+                    "row_number": row_number,
+                }
+            )
     return rows
 
 

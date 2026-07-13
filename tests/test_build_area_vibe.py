@@ -121,7 +121,9 @@ class BuildAreaVibeTests(unittest.TestCase):
             output_path = Path(temp_dir) / "area-vibe.csv"
 
             with input_path.open("w", newline="", encoding="utf-8") as source:
-                writer = csv.DictWriter(source, fieldnames=["cell_id", "cell_features", "cell_boundary"])
+                writer = csv.DictWriter(
+                    source, fieldnames=["cell_id", "cell_features", "cell_boundary"]
+                )
                 writer.writeheader()
                 writer.writerow(
                     {

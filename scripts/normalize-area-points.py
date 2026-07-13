@@ -2,7 +2,6 @@ import csv
 import json
 import sys
 
-
 FOOD_AND_CAFE = "Food & café"
 NIGHTLIFE = "Nightlife"
 TOURIST_LODGING = "Tourist lodging"
