@@ -1,8 +1,11 @@
 import argparse
 import csv
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 from urllib import error, request
+from urllib.parse import urlsplit
 
 DEFAULT_MODEL = "mistral-nemo"
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
@@ -62,13 +65,22 @@ VALID_LABELS = {"positive", "mixed", "negative"}
 
 
 class OllamaClient:
-    def __init__(self, base_url, timeout_seconds=DEFAULT_TIMEOUT_SECONDS, retries=DEFAULT_RETRIES):
+    def __init__(
+        self,
+        base_url: str,
+        timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+        retries: int = DEFAULT_RETRIES,
+    ) -> None:
+        if urlsplit(base_url).scheme not in ("http", "https"):
+            raise ValueError(f"Ollama URL must use http or https, got: {base_url}")
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         self.retries = retries
 
-    def chat(self, model, messages, response_format="json"):
-        payload = {
+    def chat(
+        self, model: str, messages: list[dict[str, str]], response_format: str = "json"
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
             "model": model,
             "messages": messages,
             "stream": False,
@@ -80,21 +92,22 @@ class OllamaClient:
         url = f"{self.base_url}/api/chat"
         body = json.dumps(payload).encode("utf-8")
         headers = {"Content-Type": "application/json"}
-        req = request.Request(url, data=body, headers=headers, method="POST")
+        req = request.Request(url, data=body, headers=headers, method="POST")  # noqa: S310 — scheme validated in __init__
 
         last_error = None
         for _ in range(self.retries + 1):
             try:
-                with request.urlopen(req, timeout=self.timeout_seconds) as response:
+                with request.urlopen(req, timeout=self.timeout_seconds) as response:  # noqa: S310 — scheme validated in __init__
                     raw_body = response.read().decode("utf-8")
-                return json.loads(raw_body)
+                parsed: dict[str, Any] = json.loads(raw_body)
+                return parsed
             except (error.HTTPError, error.URLError, TimeoutError, json.JSONDecodeError) as exc:
                 last_error = exc
 
         raise RuntimeError(f"Failed to query Ollama at {url}: {last_error}")
 
 
-def sanitize_vibe(vibe):
+def sanitize_vibe(vibe: Any) -> str:
     cleaned = " ".join(str(vibe or "").split())
     cleaned = cleaned.strip("`\"' ")
     if cleaned.endswith("."):
@@ -104,7 +117,7 @@ def sanitize_vibe(vibe):
     return cleaned[:240]
 
 
-def normalize_label(label):
+def normalize_label(label: Any) -> str:
     cleaned = str(label or "").strip().lower()
     if cleaned in VALID_LABELS:
         return cleaned
@@ -117,7 +130,7 @@ def normalize_label(label):
     return "mixed"
 
 
-def extract_vibe_and_label(content):
+def extract_vibe_and_label(content: Any) -> tuple[str, str]:
     text = str(content or "").strip()
     if not text:
         return "Unclassified vibe", "mixed"
@@ -139,14 +152,16 @@ def extract_vibe_and_label(content):
     return sanitize_vibe(first_line), "mixed"
 
 
-def build_prompt(cell_features, scores):
+def build_prompt(cell_features: dict[str, Any], scores: dict[str, Any]) -> str:
     return USER_PROMPT_TEMPLATE.format(
         cell_features=json.dumps(cell_features, sort_keys=True),
         scores=json.dumps(scores, sort_keys=True),
     )
 
 
-def classify_cell_vibe(ollama_client, model, cell_features, scores):
+def classify_cell_vibe(
+    ollama_client: OllamaClient, model: str, cell_features: dict[str, Any], scores: dict[str, Any]
+) -> tuple[str, str]:
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": build_prompt(cell_features, scores)},
@@ -156,7 +171,7 @@ def classify_cell_vibe(ollama_client, model, cell_features, scores):
     return extract_vibe_and_label(content)
 
 
-def parse_json_column(cell_id, column_name, raw_json):
+def parse_json_column(cell_id: str, column_name: str, raw_json: Any) -> dict[str, Any]:
     try:
         parsed = json.loads(raw_json)
     except json.JSONDecodeError as exc:
@@ -166,7 +181,7 @@ def parse_json_column(cell_id, column_name, raw_json):
     return parsed
 
 
-def normalize_classification_result(result):
+def normalize_classification_result(result: Any) -> tuple[str, str]:
     if isinstance(result, dict):
         return sanitize_vibe(result.get("vibe")), normalize_label(result.get("label"))
     if isinstance(result, (list, tuple)) and len(result) >= 2:
@@ -174,7 +189,11 @@ def normalize_classification_result(result):
     return sanitize_vibe(result), "mixed"
 
 
-def build_area_vibe(input_csv_path, output_csv_path, classify_vibe_fn):
+def build_area_vibe(
+    input_csv_path: str,
+    output_csv_path: str,
+    classify_vibe_fn: Callable[[dict[str, Any], dict[str, Any]], Any],
+) -> None:
     output_path = Path(output_csv_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -210,7 +229,7 @@ def build_area_vibe(input_csv_path, output_csv_path, classify_vibe_fn):
             target.flush()
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("input_csv", help="Input area cells CSV with cell_features and scores")
     parser.add_argument("output_csv", help="Output CSV with cell_id,cell_boundary,vibe,label")

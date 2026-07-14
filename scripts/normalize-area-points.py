@@ -1,6 +1,7 @@
 import csv
 import json
 import sys
+from collections.abc import Iterable, Iterator
 
 FOOD_AND_CAFE = "Food & café"
 NIGHTLIFE = "Nightlife"
@@ -168,7 +169,7 @@ ROAD_HEAVY_HIGHWAYS = {
 }
 
 
-def parse_type_field(type_field):
+def parse_type_field(type_field: str) -> dict[str, str]:
     if not type_field:
         return {}
 
@@ -189,11 +190,11 @@ def parse_type_field(type_field):
     return normalized
 
 
-def has_name_term(name_lower, terms):
+def has_name_term(name_lower: str, terms: Iterable[str]) -> bool:
     return any(term in name_lower for term in terms)
 
 
-def classify_category(tags, name):
+def classify_category(tags: dict[str, str], name: str) -> str:
     amenity = tags.get("amenity", "")
     tourism = tags.get("tourism", "")
     leisure = tags.get("leisure", "")
@@ -266,7 +267,7 @@ def classify_category(tags, name):
     return LOCAL_SERVICES
 
 
-def normalize_rows(rows):
+def normalize_rows(rows: Iterable[dict[str, str]]) -> Iterator[dict[str, str]]:
     for row in rows:
         tags = parse_type_field(row.get("type", ""))
         category = classify_category(tags, row.get("name", ""))
@@ -280,7 +281,7 @@ def normalize_rows(rows):
         }
 
 
-def normalize_csv(input_csv_path, output_csv_path):
+def normalize_csv(input_csv_path: str, output_csv_path: str) -> None:
     with open(input_csv_path, newline="", encoding="utf-8") as source_file:
         reader = csv.DictReader(source_file)
         normalized_rows = list(normalize_rows(reader))
@@ -291,7 +292,7 @@ def normalize_csv(input_csv_path, output_csv_path):
         writer.writerows(normalized_rows)
 
 
-def main(*args):
+def main(*args: str) -> None:
     input_csv_path = args[0] if len(args) > 0 else "osm/area-points.csv"
     output_csv_path = args[1] if len(args) > 1 else "osm/area-points-normalized.csv"
     normalize_csv(input_csv_path, output_csv_path)

@@ -1,8 +1,13 @@
 import json
+import logging
 import sys
+from collections.abc import Sequence
+from typing import Any
 
 import osmium
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 REQUESTED_TAG_KEYS = (
     "amenity",
@@ -19,7 +24,7 @@ REQUESTED_TAG_KEYS = (
 )
 
 
-def tags_to_dict(tags):
+def tags_to_dict(tags: Any) -> dict[str, str]:
     tag_map = {}
     if hasattr(tags, "items"):
         for key, value in tags.items():
@@ -31,7 +36,7 @@ def tags_to_dict(tags):
     return tag_map
 
 
-def is_temple(tags):
+def is_temple(tags: dict[str, str]) -> bool:
     return (
         tags.get("landuse") == "religious"
         or tags.get("building") == "temple"
@@ -40,7 +45,7 @@ def is_temple(tags):
     )
 
 
-def is_park(tags):
+def is_park(tags: dict[str, str]) -> bool:
     return (
         tags.get("leisure") in {"park", "garden", "nature_reserve"}
         or tags.get("landuse") in {"recreation_ground", "grass"}
@@ -48,17 +53,17 @@ def is_park(tags):
     )
 
 
-def is_lake(tags):
+def is_lake(tags: dict[str, str]) -> bool:
     return tags.get("water") in {"lake", "pond", "reservoir"} or (
         tags.get("natural") == "water" and tags.get("water") in {"lake", "pond", "reservoir"}
     )
 
 
-def is_tourist_attraction(tags):
+def is_tourist_attraction(tags: dict[str, str]) -> bool:
     return tags.get("tourism") == "attraction"
 
 
-def is_cultural_site(tags):
+def is_cultural_site(tags: dict[str, str]) -> bool:
     return (
         tags.get("tourism")
         in {"museum", "gallery", "artwork", "attraction", "viewpoint", "information"}
@@ -69,11 +74,11 @@ def is_cultural_site(tags):
     )
 
 
-def has_requested_category_tag(tags):
+def has_requested_category_tag(tags: dict[str, str]) -> bool:
     return any(tags.get(key) is not None for key in REQUESTED_TAG_KEYS)
 
 
-def is_interesting_tag(tags):
+def is_interesting_tag(tags: dict[str, str]) -> bool:
     return (
         has_requested_category_tag(tags)
         or is_temple(tags)
@@ -84,14 +89,15 @@ def is_interesting_tag(tags):
     )
 
 
-def get_name(tags):
+def get_name(tags: dict[str, str]) -> str:
     return tags.get("name:en", tags.get("name", "Unknown"))
 
 
-def geometry_to_geojson(way_nodes):
+def geometry_to_geojson(way_nodes: Sequence[tuple[float, float]]) -> str:
     coordinates = [[float(lon), float(lat)] for lat, lon in way_nodes]
     is_polygon = len(coordinates) >= 4 and coordinates[0] == coordinates[-1]
 
+    geometry: dict[str, Any]
     if is_polygon:
         geometry = {"type": "Polygon", "coordinates": [coordinates]}
     else:
@@ -100,11 +106,11 @@ def geometry_to_geojson(way_nodes):
     return json.dumps(geometry, separators=(",", ":"))
 
 
-def type_details_to_json(type_details):
+def type_details_to_json(type_details: dict[str, str]) -> str:
     return json.dumps(type_details, separators=(",", ":"), sort_keys=True)
 
 
-def extract_type_details(tags):
+def extract_type_details(tags: dict[str, str]) -> dict[str, str]:
     return {key: tags[key] for key in REQUESTED_TAG_KEYS if tags.get(key) is not None}
 
 
@@ -112,11 +118,11 @@ def extract_type_details(tags):
 
 
 class WayHandler(osmium.SimpleHandler):
-    def __init__(self):
+    def __init__(self) -> None:
         osmium.SimpleHandler.__init__(self)
-        self.ways = []
+        self.ways: list[list[Any]] = []
 
-    def way(self, w):
+    def way(self, w: Any) -> None:
         tag_map = tags_to_dict(w.tags)
         if not is_interesting_tag(tag_map):
             return
@@ -126,6 +132,7 @@ class WayHandler(osmium.SimpleHandler):
             try:
                 way_nodes.append((float(n.lat), float(n.lon)))
             except Exception:
+                logger.debug("Skipping unresolved node in way %s", w.id)
                 continue
 
         if len(way_nodes) < 2:
@@ -139,7 +146,7 @@ class WayHandler(osmium.SimpleHandler):
 # --- UTILITIES ---
 
 
-def write_csv(ways, filename):
+def write_csv(ways: list[list[Any]], filename: str) -> None:
     df = pd.DataFrame(ways, columns=["name", "way_nodes", "type_details"])
     # Keep unnamed areas (name == "Unknown") but continue removing ambiguous
     # duplicates among named places.
@@ -159,7 +166,7 @@ def write_csv(ways, filename):
     df[output_columns].to_csv(filename, index=False)
 
 
-def main(start_lat, start_lon, osm_file, filename):
+def main(start_lat: str, start_lon: str, osm_file: str, filename: str) -> None:
     del start_lat
     del start_lon
     handler = WayHandler()

@@ -2,13 +2,15 @@ import csv
 import importlib.util
 import json
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
 
-def load_builder_module():
+def load_builder_module() -> types.ModuleType:
     module_path = Path(__file__).resolve().parents[1] / "scripts" / "build-area-cells.py"
     spec = importlib.util.spec_from_file_location("build_area_cells", module_path)
+    assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -19,7 +21,7 @@ builder = load_builder_module()
 
 
 class BuildAreaCellsTests(unittest.TestCase):
-    def test_build_area_cells_writes_expected_columns(self):
+    def test_build_area_cells_writes_expected_columns(self) -> None:
         rows = [
             {
                 "name": "Downtown Cafe",
@@ -89,7 +91,7 @@ class BuildAreaCellsTests(unittest.TestCase):
         self.assertIn("car_oriented", scores)
         self.assertEqual(boundary["type"], "Polygon")
 
-    def test_aggregate_cells_computes_intersection_and_derived_metrics(self):
+    def test_aggregate_cells_computes_intersection_and_derived_metrics(self) -> None:
         rows = [
             {
                 "name": "Main Road A",
@@ -167,7 +169,7 @@ class BuildAreaCellsTests(unittest.TestCase):
         )
         self.assertEqual(features["parking_count"], 1)
 
-    def test_aggregate_cells_counts_only_dedicated_footways(self):
+    def test_aggregate_cells_counts_only_dedicated_footways(self) -> None:
         residential_coords = [[105.0, 20.0], [105.001, 20.0]]
         footway_coords = [[105.0, 20.0002], [105.001, 20.0002]]
         rows = [
@@ -200,7 +202,7 @@ class BuildAreaCellsTests(unittest.TestCase):
         total_footway_length = sum(features["footway_length_m"] for features in cells.values())
         self.assertAlmostEqual(total_footway_length, expected_footway_length, places=4)
 
-    def test_compute_scores_returns_zero_for_flat_dimensions(self):
+    def test_compute_scores_returns_zero_for_flat_dimensions(self) -> None:
         cells = {
             "a": {
                 "poi_density": 10.0,
@@ -238,7 +240,7 @@ class BuildAreaCellsTests(unittest.TestCase):
         self.assertEqual(scores["a"], scores["b"])
         self.assertTrue(all(value == 0.0 for value in scores["a"].values()))
 
-    def test_build_area_cells_handles_empty_input(self):
+    def test_build_area_cells_handles_empty_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             input_path = Path(temp_dir) / "input.csv"
             output_path = Path(temp_dir) / "output.csv"
@@ -254,7 +256,7 @@ class BuildAreaCellsTests(unittest.TestCase):
 
         self.assertEqual(result_rows, [])
 
-    def test_build_area_cells_filters_cells_by_center_radius(self):
+    def test_build_area_cells_filters_cells_by_center_radius(self) -> None:
         rows = [
             {
                 "name": "Near cafe",
@@ -310,7 +312,7 @@ class BuildAreaCellsTests(unittest.TestCase):
             distance_km = builder.haversine_m(20.0, 105.0, cell_lat, cell_lon) / 1000.0
             self.assertLessEqual(distance_km, 1.0)
 
-    def test_aggregate_cells_distributes_polygon_area_and_handles_unnamed_water(self):
+    def test_aggregate_cells_distributes_polygon_area_and_handles_unnamed_water(self) -> None:
         water_ring = [
             [105.0, 20.0],
             [105.018, 20.0],
@@ -405,13 +407,13 @@ class BuildAreaCellsTests(unittest.TestCase):
             delta=expected_residential_area * 0.01,
         )
 
-    def test_is_water_feature_detects_coastal_tags(self):
+    def test_is_water_feature_detects_coastal_tags(self) -> None:
         self.assertTrue(builder.is_water_feature("Unknown", {"natural": "coastline"}))
         self.assertTrue(builder.is_water_feature("Unknown", {"natural": "beach"}))
         self.assertTrue(builder.is_water_feature("Unknown", {"natural": "water"}))
         self.assertFalse(builder.is_water_feature("Unknown", {"natural": "wood"}))
 
-    def test_coastline_linestring_contributes_water_area(self):
+    def test_coastline_linestring_contributes_water_area(self) -> None:
         coords = [[105.94, 19.86], [105.95, 19.87], [105.96, 19.875]]
         rows = [
             {

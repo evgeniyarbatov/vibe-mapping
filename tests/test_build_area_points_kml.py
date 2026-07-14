@@ -1,6 +1,7 @@
 import csv
 import importlib.util
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -8,9 +9,10 @@ from xml.etree import ElementTree as ET
 KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
 
 
-def load_kml_module():
+def load_kml_module() -> types.ModuleType:
     module_path = Path(__file__).resolve().parents[1] / "scripts" / "build-area-points-kml.py"
     spec = importlib.util.spec_from_file_location("build_area_points_kml", module_path)
+    assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -21,13 +23,13 @@ kml_builder = load_kml_module()
 
 
 class BuildAreaPointsKmlTests(unittest.TestCase):
-    def write_csv(self, path, fieldnames, rows):
+    def write_csv(self, path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
         with path.open("w", newline="", encoding="utf-8") as target:
             writer = csv.DictWriter(target, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
 
-    def test_build_area_points_kml_writes_category_styled_placemarks(self):
+    def test_build_area_points_kml_writes_category_styled_placemarks(self) -> None:
         rows = [
             {
                 "name": "Residential Street",
@@ -66,21 +68,24 @@ class BuildAreaPointsKmlTests(unittest.TestCase):
             self.assertEqual(len(polygons), 1)
             self.assertEqual(len(points), 1)
 
-            style_urls = [
-                placemark.find("kml:styleUrl", namespaces=KML_NS).text for placemark in placemarks
+            style_url_elements = [
+                placemark.find("kml:styleUrl", namespaces=KML_NS) for placemark in placemarks
             ]
+            style_urls = [element.text for element in style_url_elements if element is not None]
             self.assertIn("#category-family-residential", style_urls)
             self.assertIn("#category-scenic-water-forest", style_urls)
             self.assertIn("#category-experimental-category", style_urls)
 
-            experimental_style = tree.find(
+            experimental_style_element = tree.find(
                 './/kml:Style[@id="category-experimental-category"]/kml:LineStyle/kml:color',
                 namespaces=KML_NS,
-            ).text
+            )
+            assert experimental_style_element is not None
+            experimental_style = experimental_style_element.text
             expected_rgb = kml_builder.color_for_category("Experimental category")
             self.assertEqual(experimental_style, kml_builder.rgb_to_kml_color(expected_rgb, "ff"))
 
-    def test_build_area_points_kml_rejects_missing_required_column(self):
+    def test_build_area_points_kml_rejects_missing_required_column(self) -> None:
         rows = [
             {
                 "name": "Broken Row",
@@ -96,7 +101,7 @@ class BuildAreaPointsKmlTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Missing required columns: category"):
                 kml_builder.build_area_points_kml(str(input_path), str(output_path))
 
-    def test_build_area_points_kml_rejects_invalid_geometry_json(self):
+    def test_build_area_points_kml_rejects_invalid_geometry_json(self) -> None:
         rows = [
             {
                 "name": "Broken Geometry",
@@ -113,7 +118,7 @@ class BuildAreaPointsKmlTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "invalid JSON in geometry"):
                 kml_builder.build_area_points_kml(str(input_path), str(output_path))
 
-    def test_build_area_points_kml_rejects_unsupported_geometry_type(self):
+    def test_build_area_points_kml_rejects_unsupported_geometry_type(self) -> None:
         rows = [
             {
                 "name": "Unsupported",

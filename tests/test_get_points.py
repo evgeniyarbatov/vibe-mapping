@@ -2,13 +2,15 @@ import csv
 import importlib.util
 import json
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
 
-def load_get_points_module():
+def load_get_points_module() -> types.ModuleType:
     module_path = Path(__file__).resolve().parents[1] / "scripts" / "get-points.py"
     spec = importlib.util.spec_from_file_location("get_points", module_path)
+    assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -19,16 +21,16 @@ get_points = load_get_points_module()
 
 
 class GetPointsTests(unittest.TestCase):
-    def test_has_requested_category_tag(self):
+    def test_has_requested_category_tag(self) -> None:
         self.assertTrue(get_points.has_requested_category_tag({"amenity": "school"}))
         self.assertTrue(get_points.has_requested_category_tag({"historic": "monument"}))
         self.assertFalse(get_points.has_requested_category_tag({"religion": "buddhist"}))
 
-    def test_legacy_tag_logic_is_preserved(self):
+    def test_legacy_tag_logic_is_preserved(self) -> None:
         self.assertTrue(get_points.is_interesting_tag({"religion": "buddhist"}))
         self.assertTrue(get_points.is_interesting_tag({"boundary": "national_park"}))
 
-    def test_geometry_to_geojson_polygon_and_linestring(self):
+    def test_geometry_to_geojson_polygon_and_linestring(self) -> None:
         polygon_nodes = [
             (10.0, 20.0),
             (10.0, 21.0),
@@ -45,13 +47,13 @@ class GetPointsTests(unittest.TestCase):
         self.assertEqual(line["type"], "LineString")
         self.assertEqual(line["coordinates"][0], [20.0, 10.0])
 
-    def test_extract_type_details(self):
+    def test_extract_type_details(self) -> None:
         details = get_points.extract_type_details(
             {"tourism": "museum", "historic": "monument", "religion": "buddhist"}
         )
         self.assertEqual(details, {"tourism": "museum", "historic": "monument"})
 
-    def test_write_csv_outputs_geometry_and_compact_type_column(self):
+    def test_write_csv_outputs_geometry_and_compact_type_column(self) -> None:
         ways = [
             [
                 "City Park",
@@ -90,7 +92,7 @@ class GetPointsTests(unittest.TestCase):
         self.assertEqual(park_type, {"leisure": "park", "tourism": "attraction"})
         self.assertEqual(road_type, {"highway": "residential"})
 
-    def test_write_csv_keeps_unnamed_areas(self):
+    def test_write_csv_keeps_unnamed_areas(self) -> None:
         ways = [
             [
                 "Unknown",
