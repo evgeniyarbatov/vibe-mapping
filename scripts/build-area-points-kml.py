@@ -1,10 +1,20 @@
 import argparse
+import contextlib
 import csv
 import hashlib
 import json
 import re
+from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 from xml.etree import ElementTree as ET
+
+Position = tuple[float, float]
+
+if TYPE_CHECKING:
+    Element = ET.Element[str]
+else:
+    Element = ET.Element
 
 KML_NS = "http://www.opengis.net/kml/2.2"
 REQUIRED_COLUMNS = {"name", "geometry", "category"}
@@ -28,37 +38,37 @@ CATEGORY_COLORS = {
 }
 
 
-def rgb_to_kml_color(rgb_hex, alpha):
+def rgb_to_kml_color(rgb_hex: str, alpha: str) -> str:
     rgb = rgb_hex.strip().lstrip("#")
     if len(rgb) != 6:
         raise ValueError(f"Expected 6-char RGB color, got: {rgb_hex}")
     return f"{alpha}{rgb[4:6]}{rgb[2:4]}{rgb[0:2]}"
 
 
-def deterministic_category_color(category):
-    digest = hashlib.md5(category.encode("utf-8")).hexdigest()
+def deterministic_category_color(category: str) -> str:
+    digest = hashlib.md5(category.encode("utf-8"), usedforsecurity=False).hexdigest()
     return digest[:6].upper()
 
 
-def color_for_category(category):
+def color_for_category(category: str) -> str:
     return CATEGORY_COLORS.get(category, deterministic_category_color(category))
 
 
-def sanitize_category(raw_value):
+def sanitize_category(raw_value: Any) -> str:
     cleaned = " ".join(str(raw_value or "").split()).strip()
     if cleaned:
         return cleaned
     return "Uncategorized"
 
 
-def style_id_for_category(category):
+def style_id_for_category(category: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", category.lower()).strip("-")
     if not slug:
         slug = "uncategorized"
     return f"category-{slug}"
 
 
-def parse_position(row_number, raw_position):
+def parse_position(row_number: int, raw_position: Any) -> Position:
     if not isinstance(raw_position, list) or len(raw_position) < 2:
         raise ValueError(f"Row {row_number}: invalid coordinate pair")
     try:
@@ -69,13 +79,13 @@ def parse_position(row_number, raw_position):
     return lon, lat
 
 
-def parse_line_coordinates(row_number, raw_coordinates):
+def parse_line_coordinates(row_number: int, raw_coordinates: Any) -> list[Position]:
     if not isinstance(raw_coordinates, list) or len(raw_coordinates) < 2:
         raise ValueError(f"Row {row_number}: LineString requires at least 2 coordinates")
     return [parse_position(row_number, position) for position in raw_coordinates]
 
 
-def parse_ring_coordinates(row_number, raw_ring):
+def parse_ring_coordinates(row_number: int, raw_ring: Any) -> list[Position]:
     if not isinstance(raw_ring, list) or not raw_ring:
         raise ValueError(f"Row {row_number}: Polygon ring must contain coordinates")
     ring = [parse_position(row_number, position) for position in raw_ring]
@@ -86,7 +96,7 @@ def parse_ring_coordinates(row_number, raw_ring):
     return ring
 
 
-def parse_polygon_coordinates(row_number, raw_polygon):
+def parse_polygon_coordinates(row_number: int, raw_polygon: Any) -> dict[str, Any]:
     if not isinstance(raw_polygon, list) or not raw_polygon:
         raise ValueError(f"Row {row_number}: Polygon requires at least one ring")
     outer_ring = parse_ring_coordinates(row_number, raw_polygon[0])
@@ -94,24 +104,24 @@ def parse_polygon_coordinates(row_number, raw_polygon):
     return {"outer": outer_ring, "inners": inner_rings}
 
 
-def format_coordinates(coordinates):
+def format_coordinates(coordinates: Sequence[Position]) -> str:
     return " ".join(f"{lon:.8f},{lat:.8f},0" for lon, lat in coordinates)
 
 
-def add_point(parent, point):
+def add_point(parent: Element, point: Position) -> None:
     point_element = ET.SubElement(parent, f"{{{KML_NS}}}Point")
     ET.SubElement(
         point_element, f"{{{KML_NS}}}coordinates"
     ).text = f"{point[0]:.8f},{point[1]:.8f},0"
 
 
-def add_linestring(parent, coordinates):
+def add_linestring(parent: Element, coordinates: Sequence[Position]) -> None:
     line_element = ET.SubElement(parent, f"{{{KML_NS}}}LineString")
     ET.SubElement(line_element, f"{{{KML_NS}}}tessellate").text = "1"
     ET.SubElement(line_element, f"{{{KML_NS}}}coordinates").text = format_coordinates(coordinates)
 
 
-def add_polygon(parent, polygon):
+def add_polygon(parent: Element, polygon: dict[str, Any]) -> None:
     polygon_element = ET.SubElement(parent, f"{{{KML_NS}}}Polygon")
     ET.SubElement(polygon_element, f"{{{KML_NS}}}tessellate").text = "1"
 
@@ -127,7 +137,7 @@ def add_polygon(parent, polygon):
         ET.SubElement(inner_ring, f"{{{KML_NS}}}coordinates").text = format_coordinates(inner)
 
 
-def add_geometry(parent, row_number, geometry):
+def add_geometry(parent: Element, row_number: int, geometry: dict[str, Any]) -> None:
     geometry_type = geometry.get("type")
     coordinates = geometry.get("coordinates")
 
@@ -159,8 +169,8 @@ def add_geometry(parent, row_number, geometry):
     raise ValueError(f"Row {row_number}: unsupported geometry type: {geometry_type}")
 
 
-def read_rows(input_csv_path):
-    rows = []
+def read_rows(input_csv_path: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
     with open(input_csv_path, newline="", encoding="utf-8") as source:
         reader = csv.DictReader(source)
         missing = REQUIRED_COLUMNS.difference(set(reader.fieldnames or []))
@@ -192,7 +202,7 @@ def read_rows(input_csv_path):
     return rows
 
 
-def build_styles(rows):
+def build_styles(rows: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
     categories = []
     seen = set()
     for row in rows:
@@ -202,13 +212,13 @@ def build_styles(rows):
         seen.add(category)
         categories.append(category)
 
-    used_style_ids = set()
-    styles = {}
+    used_style_ids: set[str] = set()
+    styles: dict[str, dict[str, str]] = {}
     for category in categories:
         base_style_id = style_id_for_category(category)
         style_id = base_style_id
         if style_id in used_style_ids:
-            suffix = hashlib.md5(category.encode("utf-8")).hexdigest()[:8]
+            suffix = hashlib.md5(category.encode("utf-8"), usedforsecurity=False).hexdigest()[:8]
             style_id = f"{base_style_id}-{suffix}"
         used_style_ids.add(style_id)
         styles[category] = {
@@ -219,7 +229,7 @@ def build_styles(rows):
     return styles
 
 
-def add_styles(document, styles):
+def add_styles(document: Element, styles: dict[str, dict[str, str]]) -> None:
     for style in styles.values():
         style_element = ET.SubElement(document, f"{{{KML_NS}}}Style", id=style["style_id"])
         line_style = ET.SubElement(style_element, f"{{{KML_NS}}}LineStyle")
@@ -231,7 +241,7 @@ def add_styles(document, styles):
         ET.SubElement(poly_style, f"{{{KML_NS}}}outline").text = "1"
 
 
-def add_placemark(document, row, style):
+def add_placemark(document: Element, row: dict[str, Any], style: dict[str, str]) -> None:
     placemark = ET.SubElement(document, f"{{{KML_NS}}}Placemark")
     ET.SubElement(placemark, f"{{{KML_NS}}}name").text = row["name"]
     ET.SubElement(placemark, f"{{{KML_NS}}}description").text = f"Category: {row['category']}"
@@ -239,7 +249,7 @@ def add_placemark(document, row, style):
     add_geometry(placemark, row["row_number"], row["geometry"])
 
 
-def build_area_points_kml(input_csv_path, output_kml_path):
+def build_area_points_kml(input_csv_path: str, output_kml_path: str) -> None:
     rows = read_rows(input_csv_path)
     styles = build_styles(rows)
 
@@ -256,14 +266,12 @@ def build_area_points_kml(input_csv_path, output_kml_path):
         add_placemark(document, row, styles[row["category"]])
 
     tree = ET.ElementTree(root)
-    try:
+    with contextlib.suppress(AttributeError):
         ET.indent(tree, space="  ")
-    except AttributeError:
-        pass
     tree.write(output_path, encoding="utf-8", xml_declaration=True)
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "input_csv",

@@ -3,7 +3,9 @@ import csv
 import json
 import math
 from collections import Counter, defaultdict
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 import h3
 
@@ -84,14 +86,24 @@ WATER_TAG_VALUES = {
 
 COASTLINE_BAND_WIDTH_M = 300.0
 
+CellId = str
+Point = tuple[float, float]
+LonLat = list[float]
+Ring = list[LonLat]
+PolygonRings = list[Ring]
+Geometry = dict[str, Any]
+CellAggregate = dict[str, Any]
+Cells = dict[CellId, CellAggregate]
+Scores = dict[CellId, dict[str, Any]]
 
-def _h3_latlng_to_cell(lat, lng, resolution):
+
+def _h3_latlng_to_cell(lat: float, lng: float, resolution: int) -> CellId:
     if hasattr(h3, "latlng_to_cell"):
-        return h3.latlng_to_cell(lat, lng, resolution)
-    return h3.geo_to_h3(lat, lng, resolution)
+        return str(h3.latlng_to_cell(lat, lng, resolution))
+    return str(h3.geo_to_h3(lat, lng, resolution))
 
 
-def _h3_cell_to_boundary(cell_id):
+def _h3_cell_to_boundary(cell_id: CellId) -> list[Point]:
     if hasattr(h3, "cell_to_boundary"):
         points = h3.cell_to_boundary(cell_id)
         return [(float(lat), float(lng)) for lat, lng in points]
@@ -99,13 +111,13 @@ def _h3_cell_to_boundary(cell_id):
     return [(float(lat), float(lng)) for lat, lng in points]
 
 
-def _h3_cell_area_m2(cell_id):
+def _h3_cell_area_m2(cell_id: CellId) -> float:
     if hasattr(h3, "cell_area"):
         return float(h3.cell_area(cell_id, unit="m^2"))
     return float(h3.cell_area(cell_id, unit="m2"))
 
 
-def _h3_cell_to_latlng(cell_id):
+def _h3_cell_to_latlng(cell_id: CellId) -> Point:
     if hasattr(h3, "cell_to_latlng"):
         lat, lng = h3.cell_to_latlng(cell_id)
         return float(lat), float(lng)
@@ -113,13 +125,13 @@ def _h3_cell_to_latlng(cell_id):
     return float(lat), float(lng)
 
 
-def _h3_grid_path_cells(start_cell, end_cell):
+def _h3_grid_path_cells(start_cell: CellId, end_cell: CellId) -> list[CellId]:
     if hasattr(h3, "grid_path_cells"):
         return list(h3.grid_path_cells(start_cell, end_cell))
     return list(h3.h3_line(start_cell, end_cell))
 
 
-def haversine_m(lat1, lon1, lat2, lon2):
+def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
     d_phi = phi2 - phi1
@@ -133,7 +145,7 @@ def haversine_m(lat1, lon1, lat2, lon2):
     return EARTH_RADIUS_M * c
 
 
-def polygon_area_m2(ring):
+def polygon_area_m2(ring: Sequence[Sequence[float]]) -> float:
     if len(ring) < 3:
         return 0.0
 
@@ -159,7 +171,7 @@ def polygon_area_m2(ring):
     return abs(area) * 0.5
 
 
-def parse_type_field(type_field):
+def parse_type_field(type_field: str) -> dict[str, str]:
     if not type_field:
         return {}
 
@@ -179,23 +191,23 @@ def parse_type_field(type_field):
     return normalized
 
 
-def _ring_without_duplicate_endpoint(ring):
+def _ring_without_duplicate_endpoint(ring: Sequence[Sequence[float]]) -> list[Sequence[float]]:
     if not ring:
         return []
     if ring[0] == ring[-1]:
-        return ring[:-1]
+        return list(ring[:-1])
     return list(ring)
 
 
-def _ring_to_latlng(ring):
+def _ring_to_latlng(ring: Sequence[Sequence[float]]) -> list[Point]:
     return [(float(lat), float(lon)) for lon, lat in _ring_without_duplicate_endpoint(ring)]
 
 
-def _rings_from_geometry(geometry):
+def _rings_from_geometry(geometry: Geometry) -> list[PolygonRings]:
     geom_type = geometry.get("type")
     coords = geometry.get("coordinates", [])
 
-    polygons = []
+    polygons: list[PolygonRings] = []
     if geom_type == "Polygon":
         if coords:
             polygons.append(coords)
@@ -210,7 +222,7 @@ def _rings_from_geometry(geometry):
     return polygons
 
 
-def _polygon_total_area_m2(polygon_rings):
+def _polygon_total_area_m2(polygon_rings: PolygonRings) -> float:
     if not polygon_rings:
         return 0.0
 
@@ -219,7 +231,9 @@ def _polygon_total_area_m2(polygon_rings):
     return max(outer_area - holes_area, 0.0)
 
 
-def _project_lonlat_to_xy(lon, lat, origin_lon_r, origin_lat_r):
+def _project_lonlat_to_xy(
+    lon: float, lat: float, origin_lon_r: float, origin_lat_r: float
+) -> Point:
     lon_r = math.radians(lon)
     lat_r = math.radians(lat)
     x = EARTH_RADIUS_M * (lon_r - origin_lon_r) * math.cos(origin_lat_r)
@@ -227,23 +241,27 @@ def _project_lonlat_to_xy(lon, lat, origin_lon_r, origin_lat_r):
     return x, y
 
 
-def _ring_lonlat_to_xy(ring, origin_lon_r, origin_lat_r):
+def _ring_lonlat_to_xy(
+    ring: Sequence[Sequence[float]], origin_lon_r: float, origin_lat_r: float
+) -> list[Point]:
     return [
         _project_lonlat_to_xy(float(lon), float(lat), origin_lon_r, origin_lat_r)
         for lon, lat in _ring_without_duplicate_endpoint(ring)
     ]
 
 
-def _polygon_signed_area_xy(points):
+def _polygon_signed_area_xy(points: Sequence[Point]) -> float:
     if len(points) < 3:
         return 0.0
     area = 0.0
-    for (x1, y1), (x2, y2) in zip(points, points[1:] + [points[0]], strict=False):
+    for (x1, y1), (x2, y2) in zip(points, list(points[1:]) + [points[0]], strict=False):
         area += x1 * y2 - x2 * y1
     return area / 2.0
 
 
-def _is_inside_half_plane(point, edge_start, edge_end, orientation):
+def _is_inside_half_plane(
+    point: Point, edge_start: Point, edge_end: Point, orientation: float
+) -> bool:
     x, y = point
     x1, y1 = edge_start
     x2, y2 = edge_end
@@ -251,7 +269,7 @@ def _is_inside_half_plane(point, edge_start, edge_end, orientation):
     return cross * orientation >= -1e-9
 
 
-def _line_intersection(p1, p2, p3, p4):
+def _line_intersection(p1: Point, p2: Point, p3: Point, p4: Point) -> Point:
     x1, y1 = p1
     x2, y2 = p2
     x3, y3 = p3
@@ -268,15 +286,17 @@ def _line_intersection(p1, p2, p3, p4):
     return px, py
 
 
-def _clip_polygon_with_convex(subject_polygon, clip_polygon):
+def _clip_polygon_with_convex(
+    subject_polygon: Sequence[Point], clip_polygon: Sequence[Point]
+) -> list[Point]:
     if len(subject_polygon) < 3 or len(clip_polygon) < 3:
         return []
 
-    output = list(subject_polygon)
+    output: list[Point] = list(subject_polygon)
     orientation = 1.0 if _polygon_signed_area_xy(clip_polygon) >= 0.0 else -1.0
 
     for edge_start, edge_end in zip(
-        clip_polygon, clip_polygon[1:] + [clip_polygon[0]], strict=False
+        clip_polygon, list(clip_polygon[1:]) + [clip_polygon[0]], strict=False
     ):
         input_points = output
         output = []
@@ -301,14 +321,16 @@ def _clip_polygon_with_convex(subject_polygon, clip_polygon):
     return output
 
 
-def _clipped_ring_area_m2(subject_ring_lonlat, clip_ring_lonlat, origin_lon_r, origin_lat_r):
+def _clipped_ring_area_m2(
+    subject_ring_lonlat: Ring, clip_ring_lonlat: Ring, origin_lon_r: float, origin_lat_r: float
+) -> float:
     subject_xy = _ring_lonlat_to_xy(subject_ring_lonlat, origin_lon_r, origin_lat_r)
     clip_xy = _ring_lonlat_to_xy(clip_ring_lonlat, origin_lon_r, origin_lat_r)
     clipped_xy = _clip_polygon_with_convex(subject_xy, clip_xy)
     return abs(_polygon_signed_area_xy(clipped_xy))
 
 
-def _h3_cells_overlapping_polygon(polygon_rings, resolution):
+def _h3_cells_overlapping_polygon(polygon_rings: PolygonRings, resolution: int) -> set[CellId]:
     outer = _ring_to_latlng(polygon_rings[0]) if polygon_rings else []
     holes = [_ring_to_latlng(ring) for ring in polygon_rings[1:]]
     if len(outer) < 3:
@@ -324,8 +346,10 @@ def _h3_cells_overlapping_polygon(polygon_rings, resolution):
     return set(h3.polygon_to_cells(polygon, resolution))
 
 
-def distribute_polygon_area_across_cells(geometry, resolution):
-    allocations = defaultdict(float)
+def distribute_polygon_area_across_cells(
+    geometry: Geometry, resolution: int
+) -> dict[CellId, float]:
+    allocations: dict[CellId, float] = defaultdict(float)
     for polygon_rings in _rings_from_geometry(geometry):
         polygon_area = _polygon_total_area_m2(polygon_rings)
         if polygon_area <= 0.0:
@@ -348,9 +372,9 @@ def distribute_polygon_area_across_cells(geometry, resolution):
                 allocations[_h3_latlng_to_cell(lat, lon, resolution)] += polygon_area
             continue
 
-        intersection_areas = {}
+        intersection_areas: dict[CellId, float] = {}
         for cell_id in overlapping_cells:
-            hex_ring = [[lng, lat] for lat, lng in _h3_cell_to_boundary(cell_id)]
+            hex_ring: Ring = [[lng, lat] for lat, lng in _h3_cell_to_boundary(cell_id)]
             if hex_ring and hex_ring[0] != hex_ring[-1]:
                 hex_ring.append(hex_ring[0])
 
@@ -382,7 +406,7 @@ def distribute_polygon_area_across_cells(geometry, resolution):
     return dict(allocations)
 
 
-def linestring_length_m(coords):
+def linestring_length_m(coords: Sequence[Sequence[float]]) -> float:
     if len(coords) < 2:
         return 0.0
 
@@ -392,11 +416,13 @@ def linestring_length_m(coords):
     return length
 
 
-def distribute_linestring_length_across_cells(coords, resolution):
+def distribute_linestring_length_across_cells(
+    coords: Sequence[Sequence[float]], resolution: int
+) -> dict[CellId, float]:
     if len(coords) < 2:
         return {}
 
-    allocations = defaultdict(float)
+    allocations: dict[CellId, float] = defaultdict(float)
     for (lon1, lat1), (lon2, lat2) in zip(coords, coords[1:], strict=False):
         segment_length = haversine_m(lat1, lon1, lat2, lon2)
         if segment_length <= 0.0:
@@ -418,7 +444,7 @@ def distribute_linestring_length_across_cells(coords, resolution):
     return dict(allocations)
 
 
-def geometry_centroid_lonlat(geometry):
+def geometry_centroid_lonlat(geometry: Geometry) -> Point | None:
     coords = geometry.get("coordinates", [])
     geom_type = geometry.get("type")
 
@@ -464,12 +490,12 @@ def geometry_centroid_lonlat(geometry):
     return None
 
 
-def is_water_name(name):
+def is_water_name(name: str | None) -> bool:
     lowered = (name or "").lower()
     return any(term in lowered for term in WATER_NAME_TERMS)
 
 
-def is_water_feature(name, tags):
+def is_water_feature(name: str | None, tags: dict[str, str]) -> bool:
     water = tags.get("water", "")
     natural = tags.get("natural", "")
     waterway = tags.get("waterway", "")
@@ -486,11 +512,11 @@ def is_water_feature(name, tags):
     return is_water_name(name)
 
 
-def is_coastline_like_feature(tags):
+def is_coastline_like_feature(tags: dict[str, str]) -> bool:
     return tags.get("natural", "") in {"coastline", "beach"}
 
 
-def init_cell_aggregate():
+def init_cell_aggregate() -> CellAggregate:
     return {
         "poi_total": 0,
         "food_count": 0,
@@ -513,7 +539,7 @@ def init_cell_aggregate():
     }
 
 
-def update_poi_mix(cell, category, name):
+def update_poi_mix(cell: CellAggregate, category: str, name: str | None) -> None:
     lowered_name = (name or "").lower()
     cell["poi_total"] += 1
 
@@ -539,7 +565,9 @@ def update_poi_mix(cell, category, name):
         cell["parking_count"] += 1
 
 
-def update_land_texture(cell, category, name, tags, area):
+def update_land_texture(
+    cell: CellAggregate, category: str, name: str | None, tags: dict[str, str], area: float
+) -> None:
     if area <= 0.0:
         return
 
@@ -562,7 +590,14 @@ def update_land_texture(cell, category, name, tags, area):
         cell["building_area_m2"] += area
 
 
-def update_water_from_lines(cells, category, name, tags, geometry, resolution):
+def update_water_from_lines(
+    cells: Cells,
+    category: str,
+    name: str | None,
+    tags: dict[str, str],
+    geometry: Geometry,
+    resolution: int,
+) -> None:
     if geometry.get("type") != "LineString":
         return
     if category != SCENIC_WATER_FOREST:
@@ -583,15 +618,17 @@ def update_water_from_lines(cells, category, name, tags, geometry, resolution):
         cells[cell_id]["water_area_m2"] += length_m * COASTLINE_BAND_WIDTH_M
 
 
-def endpoint_key(lon, lat, precision=6):
+def endpoint_key(lon: float, lat: float, precision: int = 6) -> str:
     return f"{round(lon, precision):.{precision}f},{round(lat, precision):.{precision}f}"
 
 
-def is_dedicated_footway(tags):
+def is_dedicated_footway(tags: dict[str, str]) -> bool:
     return tags.get("highway", "") in DEDICATED_FOOTWAY_HIGHWAYS
 
 
-def update_streets(cell, category, geometry, tags):
+def update_streets(
+    cell: CellAggregate, category: str, geometry: Geometry, tags: dict[str, str]
+) -> None:
     if geometry.get("type") != "LineString":
         return
 
@@ -614,12 +651,12 @@ def update_streets(cell, category, geometry, tags):
         cell["footway_length_m"] += length
 
 
-def compute_intersection_count(cell):
+def compute_intersection_count(cell: CellAggregate) -> int:
     counts = cell["_road_endpoint_counts"]
     return sum(1 for value in counts.values() if value >= 2)
 
 
-def add_derived_fields(cell, cell_area_m2):
+def add_derived_fields(cell: CellAggregate, cell_area_m2: float) -> None:
     cell_area_km2 = cell_area_m2 / 1_000_000.0 if cell_area_m2 > 0 else 0.0
     intersection_count = compute_intersection_count(cell)
 
@@ -653,7 +690,7 @@ def add_derived_fields(cell, cell_area_m2):
     del cell["_road_endpoint_counts"]
 
 
-def round_floats(payload, digits=6):
+def round_floats(payload: dict[str, Any], digits: int = 6) -> dict[str, Any]:
     rounded = {}
     for key, value in payload.items():
         if isinstance(value, float):
@@ -663,22 +700,22 @@ def round_floats(payload, digits=6):
     return rounded
 
 
-def minmax_normalizers(cells, fields):
+def minmax_normalizers(cells: Cells, fields: Sequence[str]) -> Callable[[str, float], float]:
     field_values = {field: [cells[cell_id][field] for cell_id in cells] for field in fields}
     minima = {field: min(values) for field, values in field_values.items()}
     maxima = {field: max(values) for field, values in field_values.items()}
 
-    def norm(field, value):
+    def norm(field: str, value: float) -> float:
         minimum = minima[field]
         maximum = maxima[field]
         if math.isclose(minimum, maximum):
             return 0.0
-        return (value - minimum) / (maximum - minimum)
+        return float((value - minimum) / (maximum - minimum))
 
     return norm
 
 
-def compute_scores(cells):
+def compute_scores(cells: Cells) -> Scores:
     if not cells:
         return {}
 
@@ -699,7 +736,7 @@ def compute_scores(cells):
     ]
     norm = minmax_normalizers(cells, norm_fields)
 
-    scores = {}
+    scores: Scores = {}
     for cell_id, features in cells.items():
         scores[cell_id] = {
             "busy": norm("poi_density", features["poi_density"])
@@ -724,7 +761,7 @@ def compute_scores(cells):
     return scores
 
 
-def cell_boundary_geojson(cell_id):
+def cell_boundary_geojson(cell_id: CellId) -> Geometry:
     boundary = _h3_cell_to_boundary(cell_id)
     coordinates = [[lng, lat] for lat, lng in boundary]
     if coordinates and coordinates[0] != coordinates[-1]:
@@ -732,8 +769,8 @@ def cell_boundary_geojson(cell_id):
     return {"type": "Polygon", "coordinates": [coordinates]}
 
 
-def aggregate_cells(input_csv_path, resolution):
-    cells = defaultdict(init_cell_aggregate)
+def aggregate_cells(input_csv_path: str, resolution: int) -> Cells:
+    cells: Cells = defaultdict(init_cell_aggregate)
 
     with open(input_csv_path, newline="", encoding="utf-8") as source:
         reader = csv.DictReader(source)
@@ -772,7 +809,9 @@ def aggregate_cells(input_csv_path, resolution):
     return cells
 
 
-def filter_cells_by_center_radius(cells, center_lat, center_lon, radius_km):
+def filter_cells_by_center_radius(
+    cells: Cells, center_lat: float | None, center_lon: float | None, radius_km: float | None
+) -> Cells:
     if center_lat is None or center_lon is None or radius_km is None:
         return dict(cells)
 
@@ -785,7 +824,7 @@ def filter_cells_by_center_radius(cells, center_lat, center_lon, radius_km):
     return filtered_cells
 
 
-def write_cells_csv(output_csv_path, cells, scores):
+def write_cells_csv(output_csv_path: str, cells: Cells, scores: Scores) -> None:
     output_path = Path(output_csv_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -808,13 +847,13 @@ def write_cells_csv(output_csv_path, cells, scores):
 
 
 def build_area_cells(
-    input_csv_path,
-    output_csv_path,
-    resolution,
-    center_lat=None,
-    center_lon=None,
-    radius_km=None,
-):
+    input_csv_path: str,
+    output_csv_path: str,
+    resolution: int,
+    center_lat: float | None = None,
+    center_lon: float | None = None,
+    radius_km: float | None = None,
+) -> None:
     cells = aggregate_cells(input_csv_path, resolution)
     cells = filter_cells_by_center_radius(cells, center_lat, center_lon, radius_km)
     if not cells:
@@ -824,7 +863,7 @@ def build_area_cells(
     write_cells_csv(output_csv_path, cells, scores)
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("input_csv", help="Normalized POI CSV (name,geometry,category)")
     parser.add_argument("output_csv", help="Output CSV with cell features and scores")

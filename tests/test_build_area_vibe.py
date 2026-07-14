@@ -1,13 +1,16 @@
 import csv
 import importlib.util
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from typing import Any
 
 
-def load_vibe_module():
+def load_vibe_module() -> types.ModuleType:
     module_path = Path(__file__).resolve().parents[1] / "scripts" / "build-area-vibe.py"
     spec = importlib.util.spec_from_file_location("build_area_vibe", module_path)
+    assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -18,11 +21,13 @@ vibe_builder = load_vibe_module()
 
 
 class FakeOllamaClient:
-    def __init__(self, content):
+    def __init__(self, content: str) -> None:
         self.content = content
-        self.calls = []
+        self.calls: list[dict[str, Any]] = []
 
-    def chat(self, model, messages, response_format):
+    def chat(
+        self, model: str, messages: list[dict[str, str]], response_format: str
+    ) -> dict[str, Any]:
         self.calls.append(
             {
                 "model": model,
@@ -34,7 +39,7 @@ class FakeOllamaClient:
 
 
 class BuildAreaVibeTests(unittest.TestCase):
-    def test_extract_vibe_prefers_json_vibe_field(self):
+    def test_extract_vibe_prefers_json_vibe_field(self) -> None:
         self.assertEqual(
             vibe_builder.extract_vibe_and_label(
                 '{"vibe":"Lively walkable market streets","label":"positive"}'
@@ -42,13 +47,13 @@ class BuildAreaVibeTests(unittest.TestCase):
             ("Lively walkable market streets", "positive"),
         )
 
-    def test_extract_vibe_accepts_plain_text_fallback(self):
+    def test_extract_vibe_accepts_plain_text_fallback(self) -> None:
         self.assertEqual(
             vibe_builder.extract_vibe_and_label("  Scenic and quiet  \nsecondary line"),
             ("Scenic and quiet", "mixed"),
         )
 
-    def test_classify_cell_vibe_uses_ollama_response_content(self):
+    def test_classify_cell_vibe_uses_ollama_response_content(self) -> None:
         client = FakeOllamaClient('{"vibe":"Calm residential roads","label":"mixed"}')
 
         vibe = vibe_builder.classify_cell_vibe(
@@ -65,7 +70,7 @@ class BuildAreaVibeTests(unittest.TestCase):
         self.assertIn("cell_features=", user_message)
         self.assertIn("scores=", user_message)
 
-    def test_build_area_vibe_writes_expected_columns(self):
+    def test_build_area_vibe_writes_expected_columns(self) -> None:
         input_rows = [
             {
                 "cell_id": "abc",
@@ -81,9 +86,9 @@ class BuildAreaVibeTests(unittest.TestCase):
             },
         ]
 
-        captured = []
+        captured: list[tuple[dict[str, Any], dict[str, Any]]] = []
 
-        def classify(cell_features, scores):
+        def classify(cell_features: dict[str, Any], scores: dict[str, Any]) -> str:
             captured.append((cell_features, scores))
             return "Balanced local services"
 
@@ -115,7 +120,7 @@ class BuildAreaVibeTests(unittest.TestCase):
         self.assertEqual(captured[0][0]["poi_total"], 3)
         self.assertEqual(captured[1][1]["car_oriented"], 0.6)
 
-    def test_build_area_vibe_rejects_missing_columns(self):
+    def test_build_area_vibe_rejects_missing_columns(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             input_path = Path(temp_dir) / "area-cells.csv"
             output_path = Path(temp_dir) / "area-vibe.csv"
@@ -136,11 +141,11 @@ class BuildAreaVibeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Missing required columns: scores"):
                 vibe_builder.build_area_vibe(str(input_path), str(output_path), lambda *_: "N/A")
 
-    def test_parse_json_column_rejects_invalid_json(self):
+    def test_parse_json_column_rejects_invalid_json(self) -> None:
         with self.assertRaisesRegex(ValueError, "invalid JSON in cell_features"):
             vibe_builder.parse_json_column("abc", "cell_features", "{not-json}")
 
-    def test_build_area_vibe_persists_completed_rows_on_late_failure(self):
+    def test_build_area_vibe_persists_completed_rows_on_late_failure(self) -> None:
         input_rows = [
             {
                 "cell_id": "abc",
@@ -158,7 +163,7 @@ class BuildAreaVibeTests(unittest.TestCase):
 
         call_count = 0
 
-        def classify(_cell_features, _scores):
+        def classify(_cell_features: dict[str, Any], _scores: dict[str, Any]) -> str:
             nonlocal call_count
             call_count += 1
             if call_count == 2:
@@ -188,7 +193,7 @@ class BuildAreaVibeTests(unittest.TestCase):
         self.assertEqual(result_rows[0]["vibe"], "First-row vibe")
         self.assertEqual(result_rows[0]["label"], "mixed")
 
-    def test_normalize_classification_result_accepts_multiple_shapes(self):
+    def test_normalize_classification_result_accepts_multiple_shapes(self) -> None:
         self.assertEqual(
             vibe_builder.normalize_classification_result(
                 {"vibe": "Comfortable and lively sidewalks", "label": "good"}

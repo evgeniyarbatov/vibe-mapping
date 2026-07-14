@@ -1,6 +1,7 @@
 import csv
 import importlib.util
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -8,9 +9,10 @@ from xml.etree import ElementTree as ET
 KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
 
 
-def load_kml_module():
+def load_kml_module() -> types.ModuleType:
     module_path = Path(__file__).resolve().parents[1] / "scripts" / "build-area-vibe-kml.py"
     spec = importlib.util.spec_from_file_location("build_area_vibe_kml", module_path)
+    assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -21,16 +23,16 @@ kml_builder = load_kml_module()
 
 
 class BuildAreaVibeKmlTests(unittest.TestCase):
-    def write_csv(self, path, fieldnames, rows):
+    def write_csv(self, path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
         with path.open("w", newline="", encoding="utf-8") as target:
             writer = csv.DictWriter(target, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
 
-    def write_area_cells_csv(self, path, rows):
+    def write_area_cells_csv(self, path: Path, rows: list[dict[str, str]]) -> None:
         self.write_csv(path, ["cell_id", "cell_features", "scores"], rows)
 
-    def test_build_area_vibe_kml_writes_area_placemarks_with_details(self):
+    def test_build_area_vibe_kml_writes_area_placemarks_with_details(self) -> None:
         vibe_rows = [
             {
                 "cell_id": "cell-a",
@@ -93,27 +95,33 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
             ]
             self.assertEqual(len(area_placemarks), 3)
 
+            area_style_url_elements = [
+                placemark.find("kml:styleUrl", namespaces=KML_NS) for placemark in area_placemarks
+            ]
             area_style_urls = [
-                placemark.find("kml:styleUrl", namespaces=KML_NS).text
-                for placemark in area_placemarks
+                element.text for element in area_style_url_elements if element is not None
             ]
             self.assertEqual(len(set(area_style_urls)), 2)
             self.assertIn("#area-label-positive", area_style_urls)
             self.assertIn("#area-label-negative", area_style_urls)
 
-            cell_a_description = next(
-                placemark.find("kml:description", namespaces=KML_NS).text
+            cell_a_placemark = next(
+                placemark
                 for placemark in placemarks
-                if placemark.find("kml:name", namespaces=KML_NS).text
-                == "Quiet Industrial (cell-a)"
+                if (name_element := placemark.find("kml:name", namespaces=KML_NS)) is not None
+                and name_element.text == "Quiet Industrial (cell-a)"
             )
+            description_element = cell_a_placemark.find("kml:description", namespaces=KML_NS)
+            assert description_element is not None
+            cell_a_description = description_element.text
+            assert cell_a_description is not None
             self.assertIn("Area cell-a", cell_a_description)
             self.assertIn("Cell Features:", cell_a_description)
             self.assertIn('"intersection_count": 3', cell_a_description)
             self.assertIn("Scores:", cell_a_description)
             self.assertIn('"walkable": 0.7', cell_a_description)
 
-    def test_build_area_vibe_kml_defaults_invalid_label_to_mixed(self):
+    def test_build_area_vibe_kml_defaults_invalid_label_to_mixed(self) -> None:
         vibe_rows = [
             {
                 "cell_id": "cell-a",
@@ -142,10 +150,11 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
             )
             tree = ET.parse(output_path)
 
-            area_style_url = tree.find(".//kml:Placemark/kml:styleUrl", namespaces=KML_NS).text
-            self.assertEqual(area_style_url, "#area-label-mixed")
+            area_style_url_element = tree.find(".//kml:Placemark/kml:styleUrl", namespaces=KML_NS)
+            assert area_style_url_element is not None
+            self.assertEqual(area_style_url_element.text, "#area-label-mixed")
 
-    def test_build_area_vibe_kml_rejects_missing_required_column(self):
+    def test_build_area_vibe_kml_rejects_missing_required_column(self) -> None:
         area_cell_rows = [
             {
                 "cell_id": "cell-a",
@@ -176,7 +185,7 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
                     str(input_path), str(output_path), str(area_cells_path)
                 )
 
-    def test_build_area_vibe_kml_rejects_invalid_boundary_json(self):
+    def test_build_area_vibe_kml_rejects_invalid_boundary_json(self) -> None:
         vibe_rows = [
             {
                 "cell_id": "cell-a",
@@ -205,7 +214,7 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
                     str(input_path), str(output_path), str(area_cells_path)
                 )
 
-    def test_build_area_vibe_kml_uses_empty_details_when_area_cell_missing(self):
+    def test_build_area_vibe_kml_uses_empty_details_when_area_cell_missing(self) -> None:
         vibe_rows = [
             {
                 "cell_id": "cell-a",
@@ -233,7 +242,10 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
                 str(input_path), str(output_path), str(area_cells_path)
             )
             tree = ET.parse(output_path)
-            description = tree.find(".//kml:Placemark/kml:description", namespaces=KML_NS).text
+            description_element = tree.find(".//kml:Placemark/kml:description", namespaces=KML_NS)
+            assert description_element is not None
+            description = description_element.text
+            assert description is not None
             self.assertIn("Cell Features:\n{}", description)
             self.assertIn("Scores:\n{}", description)
 

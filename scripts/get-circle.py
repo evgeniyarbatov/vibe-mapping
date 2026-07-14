@@ -6,16 +6,16 @@ NUMBER_OF_POINTS = 32
 
 
 def generate_circle_poly(
-    lat,
-    lon,
-    radius_km,
-    filename,
-):
+    lat: float,
+    lon: float,
+    radius_km: float,
+    filename: str,
+) -> None:
     points = []
     for i in range(NUMBER_OF_POINTS):
         bearing = 360 * i / NUMBER_OF_POINTS
 
-        destination = geodesic(kilometers=float(radius_km)).destination((lat, lon), bearing)
+        destination = geodesic(kilometers=radius_km).destination((lat, lon), bearing)
         point_lon, point_lat = destination.longitude, destination.latitude
         points.append((point_lon, point_lat))
 
@@ -28,15 +28,15 @@ def generate_circle_poly(
 
 
 def main(
-    start_lat,
-    start_lon,
-    radius_km,
-    polygon_filename,
-):
+    start_lat: str,
+    start_lon: str,
+    radius_km: str,
+    polygon_filename: str,
+) -> None:
     generate_circle_poly(
-        start_lat,
-        start_lon,
-        radius_km,
+        float(start_lat),
+        float(start_lon),
+        float(radius_km),
         polygon_filename,
     )
 

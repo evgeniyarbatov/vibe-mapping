@@ -1,13 +1,15 @@
 import csv
 import importlib.util
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
 
-def load_normalizer_module():
+def load_normalizer_module() -> types.ModuleType:
     module_path = Path(__file__).resolve().parents[1] / "scripts" / "normalize-area-points.py"
     spec = importlib.util.spec_from_file_location("normalize_area_points", module_path)
+    assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -18,16 +20,16 @@ normalizer = load_normalizer_module()
 
 
 class NormalizeAreaPointsTests(unittest.TestCase):
-    def test_parse_type_field_accepts_json_object(self):
+    def test_parse_type_field_accepts_json_object(self) -> None:
         parsed = normalizer.parse_type_field('{"Amenity":"School","building":"yes"}')
         self.assertEqual(parsed, {"amenity": "school", "building": "yes"})
 
-    def test_parse_type_field_handles_invalid_json(self):
+    def test_parse_type_field_handles_invalid_json(self) -> None:
         self.assertEqual(normalizer.parse_type_field("{bad"), {})
         self.assertEqual(normalizer.parse_type_field("[]"), {})
         self.assertEqual(normalizer.parse_type_field(""), {})
 
-    def test_classify_category_covers_requested_categories(self):
+    def test_classify_category_covers_requested_categories(self) -> None:
         self.assertEqual(
             normalizer.classify_category({"amenity": "cafe"}, "Street Cafe"),
             normalizer.FOOD_AND_CAFE,
@@ -81,7 +83,7 @@ class NormalizeAreaPointsTests(unittest.TestCase):
             normalizer.ROAD_HEAVY,
         )
 
-    def test_normalize_csv_outputs_name_geometry_category_and_type(self):
+    def test_normalize_csv_outputs_name_geometry_category_and_type(self) -> None:
         rows = [
             {
                 "name": "Neighborhood Road",

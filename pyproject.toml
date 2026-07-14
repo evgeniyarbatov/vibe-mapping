@@ -22,6 +22,9 @@ target-version = "py311"
 select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM", "RET", "S"]
 ignore = ["E501", "B008", "S101"]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S314"]
+
 
 [tool.ruff.format]
 quote-style = "double"
@@ -32,3 +35,18 @@ python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "geopy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "h3.*"
+ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.0",
+    "pandas-stubs>=3.0.3.260530",
+    "ruff>=0.15.21",
+]

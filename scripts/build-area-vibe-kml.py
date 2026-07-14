@@ -1,7 +1,10 @@
 import argparse
+import contextlib
 import csv
 import json
+from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 from xml.etree import ElementTree as ET
 
 KML_NS = "http://www.opengis.net/kml/2.2"
@@ -10,6 +13,13 @@ AREA_CELLS_REQUIRED_COLUMNS = {"cell_id", "cell_features", "scores"}
 DEFAULT_AREA_CELLS_CSV = "osm/area-cells.csv"
 VALID_LABELS = {"positive", "mixed", "negative"}
 
+Position = tuple[float, float]
+
+if TYPE_CHECKING:
+    Element = ET.Element[str]
+else:
+    Element = ET.Element
+
 LABEL_COLORS = {
     "positive": "2E8B57",
     "mixed": "E9C46A",
@@ -17,21 +27,21 @@ LABEL_COLORS = {
 }
 
 
-def sanitize_vibe(vibe):
+def sanitize_vibe(vibe: Any) -> str:
     cleaned = " ".join(str(vibe or "").split()).strip()
     if cleaned:
         return cleaned
     return "Unclassified vibe"
 
 
-def normalize_label(label):
+def normalize_label(label: Any) -> str:
     cleaned = str(label or "").strip().lower()
     if cleaned in VALID_LABELS:
         return cleaned
     return "mixed"
 
 
-def rgb_to_kml_color(rgb_hex, alpha):
+def rgb_to_kml_color(rgb_hex: str, alpha: str) -> str:
     rgb = rgb_hex.strip().lstrip("#")
     if len(rgb) != 6:
         raise ValueError(f"Expected 6-char RGB color, got: {rgb_hex}")
@@ -41,7 +51,7 @@ def rgb_to_kml_color(rgb_hex, alpha):
     return f"{alpha}{blue}{green}{red}"
 
 
-def parse_json_object(cell_id, column_name, raw_value):
+def parse_json_object(cell_id: str, column_name: str, raw_value: Any) -> dict[str, Any]:
     try:
         payload = json.loads(raw_value)
     except (TypeError, json.JSONDecodeError) as exc:
@@ -51,7 +61,7 @@ def parse_json_object(cell_id, column_name, raw_value):
     return payload
 
 
-def normalize_position(cell_id, position):
+def normalize_position(cell_id: str, position: Any) -> Position:
     if not isinstance(position, list) or len(position) < 2:
         raise ValueError(f"Cell {cell_id}: invalid coordinate pair in cell_boundary")
     try:
@@ -62,7 +72,7 @@ def normalize_position(cell_id, position):
     return lon, lat
 
 
-def ensure_closed_ring(cell_id, ring):
+def ensure_closed_ring(cell_id: str, ring: list[Position]) -> list[Position]:
     if not ring:
         raise ValueError(f"Cell {cell_id}: empty ring in cell_boundary")
 
@@ -75,14 +85,14 @@ def ensure_closed_ring(cell_id, ring):
     return closed_ring
 
 
-def parse_ring(cell_id, raw_ring):
+def parse_ring(cell_id: str, raw_ring: Any) -> list[Position]:
     if not isinstance(raw_ring, list):
         raise ValueError(f"Cell {cell_id}: ring is not an array")
     normalized = [normalize_position(cell_id, position) for position in raw_ring]
     return ensure_closed_ring(cell_id, normalized)
 
 
-def parse_polygons(cell_id, raw_boundary):
+def parse_polygons(cell_id: str, raw_boundary: Any) -> list[dict[str, Any]]:
     try:
         boundary = json.loads(raw_boundary)
     except json.JSONDecodeError as exc:
@@ -93,6 +103,7 @@ def parse_polygons(cell_id, raw_boundary):
 
     geometry_type = boundary.get("type")
     coordinates = boundary.get("coordinates")
+    raw_polygons: Any
     if geometry_type == "Polygon":
         raw_polygons = [coordinates]
     elif geometry_type == "MultiPolygon":
@@ -105,7 +116,7 @@ def parse_polygons(cell_id, raw_boundary):
     if not isinstance(raw_polygons, list) or not raw_polygons:
         raise ValueError(f"Cell {cell_id}: missing polygon coordinates in cell_boundary")
 
-    polygons = []
+    polygons: list[dict[str, Any]] = []
     for polygon in raw_polygons:
         if not isinstance(polygon, list) or not polygon:
             raise ValueError(f"Cell {cell_id}: polygon has no rings in cell_boundary")
@@ -115,11 +126,11 @@ def parse_polygons(cell_id, raw_boundary):
     return polygons
 
 
-def format_coords(ring):
+def format_coords(ring: Sequence[Position]) -> str:
     return " ".join(f"{lon:.8f},{lat:.8f},0" for lon, lat in ring)
 
 
-def add_polygon(parent, polygon):
+def add_polygon(parent: Element, polygon: dict[str, Any]) -> None:
     polygon_element = ET.SubElement(parent, f"{{{KML_NS}}}Polygon")
     ET.SubElement(polygon_element, f"{{{KML_NS}}}tessellate").text = "1"
 
@@ -133,7 +144,7 @@ def add_polygon(parent, polygon):
         ET.SubElement(inner_ring, f"{{{KML_NS}}}coordinates").text = format_coords(inner)
 
 
-def read_area_cells_details(area_cells_csv_path):
+def read_area_cells_details(area_cells_csv_path: str) -> dict[str, dict[str, Any]]:
     with open(area_cells_csv_path, newline="", encoding="utf-8") as source:
         reader = csv.DictReader(source)
         missing = AREA_CELLS_REQUIRED_COLUMNS.difference(set(reader.fieldnames or []))
@@ -151,8 +162,10 @@ def read_area_cells_details(area_cells_csv_path):
     return details
 
 
-def read_area_vibe_rows(input_csv_path, cell_details):
-    rows = []
+def read_area_vibe_rows(
+    input_csv_path: str, cell_details: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
     with open(input_csv_path, newline="", encoding="utf-8") as source:
         reader = csv.DictReader(source)
         missing = REQUIRED_COLUMNS.difference(set(reader.fieldnames or []))
@@ -179,9 +192,9 @@ def read_area_vibe_rows(input_csv_path, cell_details):
     return rows
 
 
-def build_label_styles(rows):
+def build_label_styles(rows: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
     labels_present = {row["label"] for row in rows}
-    styles = {}
+    styles: dict[str, dict[str, str]] = {}
     for label in ["positive", "mixed", "negative"]:
         if label not in labels_present:
             continue
@@ -194,7 +207,7 @@ def build_label_styles(rows):
     return styles
 
 
-def add_styles(document, styles):
+def add_styles(document: Element, styles: dict[str, dict[str, str]]) -> None:
     for style in styles.values():
         area_style = ET.SubElement(document, f"{{{KML_NS}}}Style", id=style["area_style_id"])
         line_style = ET.SubElement(area_style, f"{{{KML_NS}}}LineStyle")
@@ -206,7 +219,7 @@ def add_styles(document, styles):
         ET.SubElement(poly_style, f"{{{KML_NS}}}outline").text = "1"
 
 
-def build_description(row):
+def build_description(row: dict[str, Any]) -> str:
     cell_features = json.dumps(row["cell_features"], indent=2, sort_keys=True)
     scores = json.dumps(row["scores"], indent=2, sort_keys=True)
     return (
@@ -218,7 +231,7 @@ def build_description(row):
     )
 
 
-def add_area_placemark(document, row, style):
+def add_area_placemark(document: Element, row: dict[str, Any], style: dict[str, str]) -> None:
     area = ET.SubElement(document, f"{{{KML_NS}}}Placemark")
     ET.SubElement(area, f"{{{KML_NS}}}name").text = f"{row['vibe']} ({row['cell_id']})"
     ET.SubElement(area, f"{{{KML_NS}}}description").text = build_description(row)
@@ -235,8 +248,10 @@ def add_area_placemark(document, row, style):
 
 
 def build_area_vibe_kml(
-    input_csv_path, output_kml_path, area_cells_csv_path=DEFAULT_AREA_CELLS_CSV
-):
+    input_csv_path: str,
+    output_kml_path: str,
+    area_cells_csv_path: str = DEFAULT_AREA_CELLS_CSV,
+) -> None:
     cell_details = read_area_cells_details(area_cells_csv_path)
     rows = read_area_vibe_rows(input_csv_path, cell_details)
     styles = build_label_styles(rows)
@@ -255,14 +270,12 @@ def build_area_vibe_kml(
         add_area_placemark(document, row, style)
 
     tree = ET.ElementTree(root)
-    try:
+    with contextlib.suppress(AttributeError):
         ET.indent(tree, space="  ")
-    except AttributeError:
-        pass
     tree.write(output_path, encoding="utf-8", xml_declaration=True)
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "input_csv", help="Input CSV with columns: cell_id, cell_boundary, vibe, label"
