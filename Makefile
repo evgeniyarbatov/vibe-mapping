@@ -1,8 +1,15 @@
 # Uses uv (https://docs.astral.sh/uv) for dependency management — uv sync creates/updates .venv; run commands via uv run, no manual activation.
 
+DATA_ROOT ?= $(HOME)/data
+REPO_NAME := $(notdir $(CURDIR))
+DATA_DIR  ?= $(DATA_ROOT)/$(REPO_NAME)
+
 OSM_URL = https://download.geofabrik.de/asia/vietnam-latest.osm.pbf
 
 DOTFILES_MK := $(HOME)/gitRepo/dotfiles/make/osm-country.mk
+
+# Set before including DOTFILES_MK, which only does OSM_DIR ?=.
+OSM_DIR := $(DATA_DIR)/osm
 
 .PHONY: country osm-country-fetch
 
@@ -28,15 +35,13 @@ START_LON = 105.93544337695647
 # START_LAT = 20.9948665623132
 # START_LON = 105.86777883150903
 
-OSM_DIR = osm
-
-CIRCLE = osm/circle.poly
-POINTS = osm/area-points.csv
-POINTS_NORMALIZED = osm/area-points-normalized.csv
-AREA_CELLS = osm/area-cells.csv
-AREA_VIBE = osm/area-vibe.csv
-AREA_POINTS_KML = osm/area-points.kml
-AREA_VIBE_KML = osm/area-vibe.kml
+CIRCLE = $(OSM_DIR)/circle.poly
+POINTS = $(OSM_DIR)/area-points.csv
+POINTS_NORMALIZED = $(OSM_DIR)/area-points-normalized.csv
+AREA_CELLS = $(OSM_DIR)/area-cells.csv
+AREA_VIBE = $(OSM_DIR)/area-vibe.csv
+AREA_POINTS_KML = $(OSM_DIR)/area-points.kml
+AREA_VIBE_KML = $(OSM_DIR)/area-vibe.kml
 OLLAMA_MODEL = mistral-nemo
 OLLAMA_URL = http://127.0.0.1:11434
 
@@ -49,6 +54,7 @@ test: install
 	@uv run python -m unittest discover -s tests -p 'test_*.py'
 
 circle: install
+	@mkdir -p $(OSM_DIR)
 	@uv run python scripts/get-circle.py \
 	$(START_LAT) \
 	$(START_LON) \
@@ -71,6 +77,7 @@ points: install area
 	$(POINTS);
 
 points-normalized: install points
+	@mkdir -p $(OSM_DIR)
 	@uv run python scripts/normalize-area-points.py \
 	$(POINTS) \
 	$(POINTS_NORMALIZED);
