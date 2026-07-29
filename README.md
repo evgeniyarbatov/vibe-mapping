@@ -24,6 +24,8 @@ The system is intentionally staged. Each stage writes an artifact that becomes t
 
 ## Data Flow
 
+Outputs below are relative to `DATA_DIR` (default `~/data/vibe-mapping/`); see [Makefile Pipeline](#makefile-pipeline).
+
 | Stage | Producer | Output | Main columns / format |
 | --- | --- | --- | --- |
 | Circle polygon | `scripts/get-circle.py` | `osm/circle.poly` | OSM polygon file for clipping |
@@ -164,13 +166,15 @@ python scripts/build-area-points-kml.py \
 
 ## Makefile Pipeline
 
+Generated data (OSM extracts, CSVs, KML) is written outside the repo, under `DATA_DIR`, which defaults to `~/data/vibe-mapping/`. Override per-run with `make <target> DATA_ROOT=/path/to/shared` or `make <target> DATA_DIR=/tmp/run-42`.
+
 Main targets:
 - `make install`: create `.venv` and install `requirements.txt`
 - `make test`: run all tests in `tests/`
 - `make country`: download country `.osm.pbf` (Geofabrik URL in `Makefile`)
-- `make circle`: generate `osm/circle.poly`
-- `make area`: clip country extract to `osm/area.osm`
-- `make points`: build `osm/area-points.csv`
+- `make circle`: generate `$(DATA_DIR)/osm/circle.poly`
+- `make area`: clip country extract to `$(DATA_DIR)/osm/area.osm`
+- `make points`: build `$(DATA_DIR)/osm/area-points.csv`
 - `make points-normalized`: build normalized CSV
 - `make area-points-kml`: build category-colored feature KML
 - `make area-cells`: build H3 cell features + scores
