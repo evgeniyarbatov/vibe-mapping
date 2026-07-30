@@ -45,7 +45,7 @@ AREA_VIBE_KML = $(OSM_DIR)/area-vibe.kml
 OLLAMA_MODEL = mistral-nemo
 OLLAMA_URL = http://127.0.0.1:11434
 
-.PHONY: help install test country circle area points points-normalized area-points-kml area-cells area-vibe area-vibe-kml lock
+.PHONY: help install test country circle area points points-normalized area-points-kml area-cells area-vibe area-vibe-kml run lock
 
 install:
 	@uv sync
@@ -111,6 +111,11 @@ area-vibe-kml: install
 lock:
 	@uv lock
 
+# Entry point: full pipeline (assumes `make country` was already run once).
+# area -> points-normalized -> area-points-kml -> area-cells -> area-vibe -> area-vibe-kml.
+run: area points-normalized area-points-kml area-cells area-vibe area-vibe-kml
+	@echo "Run complete."
+
 help:
 	@echo "install           - uv sync"
 	@echo "test              - run unit tests"
@@ -122,4 +127,5 @@ help:
 	@echo "area-cells        - build H3 cells from points"
 	@echo "area-vibe         - classify area vibe via ollama"
 	@echo "area-vibe-kml     - build KML from vibe cells"
+	@echo "run               - entry point: full pipeline (after one-time 'make country')"
 	@echo "lock              - uv lock"

@@ -186,12 +186,7 @@ Recommended run order:
 make install
 make test
 make country
-make area
-make points-normalized
-make area-points-kml
-make area-cells
-make area-vibe
-make area-vibe-kml
+make run   # area -> points-normalized -> area-points-kml -> area-cells -> area-vibe -> area-vibe-kml
 ```
 
 ## Dependencies
