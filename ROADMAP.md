@@ -12,12 +12,6 @@ Right now it's one area, one run. Once comparing or merging vibe maps across are
 
 Making numeric signals legible as language — the H3-cell-to-LLM-text pattern here is a reusable way to turn structured data into something a human actually reads and trusts, useful anywhere else in this portfolio that currently just outputs a CSV.
 
-## Connects to
-
-- **[private]** — same instinct (quantify subjective place-quality), different method: geometry+score there vs. H3+LLM-text here. Worth scoring the same park both ways and comparing.
-- **[private]** — exploring the city via long walks; this project could pick *where* to walk next instead of choosing at random.
-- **[private]** — same OSM-cell-scoring shape, narrower target (parks specifically).
-
 ---
 
 ## Prior notes
