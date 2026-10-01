@@ -6,7 +6,7 @@ Most map tools tell you what's there. This one tells you what a place *feels* li
 
 ## What it opens up
 
-Right now it's one area, one run. Once comparing or merging vibe maps across areas works, the question changes from "what does this place feel like" to "where else feels like this" — turning a description tool into a discovery tool: find unexplored parts of a city that match the vibe of somewhere you already love.
+GPX mode already lets a real run ground-truth the generated vibes cell by cell. Once comparing or merging vibe maps across areas works, the question changes from "what does this place feel like" to "where else feels like this" — turning a description tool into a discovery tool: find unexplored parts of a city that match the vibe of somewhere you already love.
 
 ## Capability this builds
 
@@ -22,6 +22,5 @@ A staged OSM pipeline that clips an area, extracts and categorizes map features,
 
 ## Near-term
 
-- Fix the stale `requirements.txt` references in the README (see TODO.md) now that the repo runs on `uv`.
 - Add CI to run the existing test suite on push.
-- The pipeline is currently single-area/single-run (`DATA_DIR` per invocation) — a natural next step given the design is already staged around H3 cells is comparing or merging vibe maps across multiple areas/cities.
+- Each run writes to its own directory under `DATA_DIR` — a natural next step given the design is already staged around H3 cells is comparing or merging vibe maps across multiple areas/cities.
