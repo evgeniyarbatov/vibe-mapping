@@ -20,11 +20,11 @@ def generate_circle_poly(
         points.append((point_lon, point_lat))
 
     with open(filename, "w") as f:
-        f.write("circle\n")
+        f.write("circle\n1\n")
         for lon_p, lat_p in points:
             f.write(f"   {lon_p:.6f}   {lat_p:.6f}\n")
         f.write(f"   {points[0][0]:.6f}   {points[0][1]:.6f}\n")
-        f.write("END\n")
+        f.write("END\nEND\n")
 
 
 def main(
