@@ -312,6 +312,49 @@ class BuildAreaCellsTests(unittest.TestCase):
             distance_km = builder.haversine_m(20.0, 105.0, cell_lat, cell_lon) / 1000.0
             self.assertLessEqual(distance_km, 1.0)
 
+    def test_build_area_cells_filters_cells_by_track(self) -> None:
+        rows = [
+            {
+                "name": "On-route cafe",
+                "geometry": json.dumps(
+                    {"type": "LineString", "coordinates": [[105.0, 20.0], [105.0001, 20.0001]]}
+                ),
+                "category": builder.FOOD_AND_CAFE,
+            },
+            {
+                "name": "Off-route road",
+                "geometry": json.dumps(
+                    {"type": "LineString", "coordinates": [[105.1, 20.1], [105.1001, 20.1001]]}
+                ),
+                "category": builder.ROAD_HEAVY,
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "input.csv"
+            output_path = Path(temp_dir) / "output.csv"
+            track_cells_path = Path(temp_dir) / "track-cells.json"
+
+            with input_path.open("w", newline="", encoding="utf-8") as source:
+                writer = csv.DictWriter(source, fieldnames=["name", "geometry", "category"])
+                writer.writeheader()
+                writer.writerows(rows)
+
+            on_route_cell = builder._h3_latlng_to_cell(20.00005, 105.00005, 9)
+            track_cells_path.write_text(json.dumps([on_route_cell]), encoding="utf-8")
+
+            builder.build_area_cells(
+                str(input_path),
+                str(output_path),
+                resolution=9,
+                track_cells_json=str(track_cells_path),
+            )
+
+            with output_path.open(newline="", encoding="utf-8") as output:
+                result_rows = list(csv.DictReader(output))
+
+        self.assertEqual([row["cell_id"] for row in result_rows], [on_route_cell])
+
     def test_aggregate_cells_distributes_polygon_area_and_handles_unnamed_water(self) -> None:
         water_ring = [
             [105.0, 20.0],

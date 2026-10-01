@@ -25,6 +25,7 @@ LABEL_COLORS = {
     "mixed": "E9C46A",
     "negative": "C1121F",
 }
+TRACK_COLOR = "1D4ED8"
 
 
 def sanitize_vibe(vibe: Any) -> str:
@@ -247,10 +248,26 @@ def add_area_placemark(document: Element, row: dict[str, Any], style: dict[str, 
         add_polygon(multi_geometry, polygon)
 
 
+def add_track_placemark(document: Element, track_geojson_path: str) -> None:
+    geometry = json.loads(Path(track_geojson_path).read_text(encoding="utf-8"))
+    style = ET.SubElement(document, f"{{{KML_NS}}}Style", id="track")
+    line_style = ET.SubElement(style, f"{{{KML_NS}}}LineStyle")
+    ET.SubElement(line_style, f"{{{KML_NS}}}color").text = rgb_to_kml_color(TRACK_COLOR, "ff")
+    ET.SubElement(line_style, f"{{{KML_NS}}}width").text = "3"
+
+    track = ET.SubElement(document, f"{{{KML_NS}}}Placemark")
+    ET.SubElement(track, f"{{{KML_NS}}}name").text = "Track"
+    ET.SubElement(track, f"{{{KML_NS}}}styleUrl").text = "#track"
+    line = ET.SubElement(track, f"{{{KML_NS}}}LineString")
+    coords = [(lon, lat) for lon, lat in geometry["coordinates"]]
+    ET.SubElement(line, f"{{{KML_NS}}}coordinates").text = format_coords(coords)
+
+
 def build_area_vibe_kml(
     input_csv_path: str,
     output_kml_path: str,
     area_cells_csv_path: str = DEFAULT_AREA_CELLS_CSV,
+    track_geojson_path: str | None = None,
 ) -> None:
     cell_details = read_area_cells_details(area_cells_csv_path)
     rows = read_area_vibe_rows(input_csv_path, cell_details)
@@ -268,6 +285,8 @@ def build_area_vibe_kml(
     for row in rows:
         style = styles[row["label"]]
         add_area_placemark(document, row, style)
+    if track_geojson_path is not None:
+        add_track_placemark(document, track_geojson_path)
 
     tree = ET.ElementTree(root)
     with contextlib.suppress(AttributeError):
@@ -286,9 +305,12 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_AREA_CELLS_CSV,
         help=f"Area cells CSV with cell_features and scores (default: {DEFAULT_AREA_CELLS_CSV})",
     )
+    parser.add_argument(
+        "--track-geojson", help="GeoJSON LineString of the run, drawn on top of the cells"
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    build_area_vibe_kml(args.input_csv, args.output_kml, args.area_cells_csv)
+    build_area_vibe_kml(args.input_csv, args.output_kml, args.area_cells_csv, args.track_geojson)

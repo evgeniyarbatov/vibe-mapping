@@ -249,6 +249,42 @@ class BuildAreaVibeKmlTests(unittest.TestCase):
             self.assertIn("Cell Features:\n{}", description)
             self.assertIn("Scores:\n{}", description)
 
+    def test_build_area_vibe_kml_adds_track_line(self) -> None:
+        vibe_rows = [
+            {
+                "cell_id": "cell-a",
+                "cell_boundary": '{"type":"Polygon","coordinates":[[[105.0,20.0],[105.2,20.0],[105.2,20.2],[105.0,20.2],[105.0,20.0]]]}',
+                "vibe": "Quiet Industrial",
+                "label": "positive",
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "area-vibe.csv"
+            area_cells_path = Path(temp_dir) / "area-cells.csv"
+            track_path = Path(temp_dir) / "track.geojson"
+            output_path = Path(temp_dir) / "area-vibe.kml"
+            self.write_csv(input_path, ["cell_id", "cell_boundary", "vibe", "label"], vibe_rows)
+            self.write_area_cells_csv(area_cells_path, [])
+            track_path.write_text(
+                '{"type":"LineString","coordinates":[[105.05,20.05],[105.15,20.15]]}',
+                encoding="utf-8",
+            )
+
+            kml_builder.build_area_vibe_kml(
+                str(input_path), str(output_path), str(area_cells_path), str(track_path)
+            )
+
+            tree = ET.parse(output_path)
+            lines = tree.findall(".//kml:Placemark/kml:LineString", namespaces=KML_NS)
+            polygons = tree.findall(".//kml:Placemark/kml:Polygon", namespaces=KML_NS)
+
+        self.assertEqual(len(polygons), 1)
+        self.assertEqual(len(lines), 1)
+        coords = lines[0].find("kml:coordinates", namespaces=KML_NS)
+        assert coords is not None and coords.text is not None
+        self.assertEqual(coords.text, "105.05000000,20.05000000,0 105.15000000,20.15000000,0")
+
 
 if __name__ == "__main__":
     unittest.main()

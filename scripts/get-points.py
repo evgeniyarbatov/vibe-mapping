@@ -166,9 +166,7 @@ def write_csv(ways: list[list[Any]], filename: str) -> None:
     df[output_columns].to_csv(filename, index=False)
 
 
-def main(start_lat: str, start_lon: str, osm_file: str, filename: str) -> None:
-    del start_lat
-    del start_lon
+def main(osm_file: str, filename: str) -> None:
     handler = WayHandler()
     handler.apply_file(osm_file, locations=True)
     write_csv(handler.ways, filename)

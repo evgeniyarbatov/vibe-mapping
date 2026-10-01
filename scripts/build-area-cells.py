@@ -824,6 +824,14 @@ def filter_cells_by_center_radius(
     return filtered_cells
 
 
+def filter_cells_by_track(cells: Cells, track_cells_json: str | None) -> Cells:
+    if track_cells_json is None:
+        return dict(cells)
+
+    track_cells = set(json.loads(Path(track_cells_json).read_text(encoding="utf-8")))
+    return {cell_id: features for cell_id, features in cells.items() if cell_id in track_cells}
+
+
 def write_cells_csv(output_csv_path: str, cells: Cells, scores: Scores) -> None:
     output_path = Path(output_csv_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -853,9 +861,11 @@ def build_area_cells(
     center_lat: float | None = None,
     center_lon: float | None = None,
     radius_km: float | None = None,
+    track_cells_json: str | None = None,
 ) -> None:
     cells = aggregate_cells(input_csv_path, resolution)
     cells = filter_cells_by_center_radius(cells, center_lat, center_lon, radius_km)
+    cells = filter_cells_by_track(cells, track_cells_json)
     if not cells:
         write_cells_csv(output_csv_path, cells, {})
         return
@@ -877,6 +887,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--radius-km", type=float, help="Max distance from center (km) for cell center"
     )
+    parser.add_argument(
+        "--track-cells", help="JSON list of H3 cell ids to keep (from get-track-area.py)"
+    )
 
     args = parser.parse_args()
     radius_filter_args = [
@@ -888,6 +901,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--center-lat, --center-lon, and --radius-km must be provided together")
     if args.radius_km is not None and args.radius_km < 0:
         parser.error("--radius-km must be non-negative")
+    if any(radius_filter_args) and args.track_cells is not None:
+        parser.error("--track-cells cannot be combined with the center/radius filter")
     return args
 
 
@@ -900,4 +915,5 @@ if __name__ == "__main__":
         center_lat=args.center_lat,
         center_lon=args.center_lon,
         radius_km=args.radius_km,
+        track_cells_json=args.track_cells,
     )

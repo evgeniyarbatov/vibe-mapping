@@ -1,6 +1,6 @@
 # Uses uv (https://docs.astral.sh/uv) for dependency management — uv sync creates/updates .venv; run commands via uv run, no manual activation.
 
-DATA_ROOT ?= $(HOME)/data
+DATA_ROOT ?= $(HOME)/Documents/data
 REPO_NAME := $(notdir $(CURDIR))
 DATA_DIR  ?= $(DATA_ROOT)/$(REPO_NAME)
 
@@ -25,7 +25,16 @@ country osm-country-fetch:
 endif
 
 RADIUS_KM = 5
-H3_RESOLUTION = 8
+
+# GPX mode: `make run GPX=path/to/run.gpx`; otherwise circle mode around START_LAT/START_LON.
+ifdef GPX
+RUN_NAME ?= $(basename $(notdir $(GPX)))
+H3_RESOLUTION ?= 9
+else
+RUN_NAME ?= circle
+H3_RESOLUTION ?= 8
+endif
+RUN_DIR := $(DATA_DIR)/$(RUN_NAME)
 
 # Hai Tien
 START_LAT = 19.843303820107394
@@ -35,49 +44,67 @@ START_LON = 105.93544337695647
 # START_LAT = 20.9948665623132
 # START_LON = 105.86777883150903
 
-CIRCLE = $(OSM_DIR)/circle.poly
-POINTS = $(OSM_DIR)/area-points.csv
-POINTS_NORMALIZED = $(OSM_DIR)/area-points-normalized.csv
-AREA_CELLS = $(OSM_DIR)/area-cells.csv
-AREA_VIBE = $(OSM_DIR)/area-vibe.csv
-AREA_POINTS_KML = $(OSM_DIR)/area-points.kml
-AREA_VIBE_KML = $(OSM_DIR)/area-vibe.kml
+AREA_POLY = $(RUN_DIR)/area.poly
+TRACK_CELLS = $(RUN_DIR)/track-cells.json
+TRACK_GEOJSON = $(RUN_DIR)/track.geojson
+POINTS = $(RUN_DIR)/area-points.csv
+POINTS_NORMALIZED = $(RUN_DIR)/area-points-normalized.csv
+AREA_CELLS = $(RUN_DIR)/area-cells.csv
+AREA_VIBE = $(RUN_DIR)/area-vibe.csv
+AREA_POINTS_KML = $(RUN_DIR)/area-points.kml
+AREA_VIBE_KML = $(RUN_DIR)/area-vibe.kml
+
+ifdef GPX
+CELL_FILTER_ARGS = --track-cells $(TRACK_CELLS)
+VIBE_KML_ARGS = --track-geojson $(TRACK_GEOJSON)
+else
+CELL_FILTER_ARGS = --center-lat $(START_LAT) --center-lon $(START_LON) --radius-km $(RADIUS_KM)
+VIBE_KML_ARGS =
+endif
 OLLAMA_MODEL = mistral-nemo
 OLLAMA_URL = http://127.0.0.1:11434
 
-.PHONY: help install test country circle area points points-normalized area-points-kml area-cells area-vibe area-vibe-kml run lock
+.PHONY: help install tools test country area-poly area points points-normalized area-points-kml area-cells area-vibe area-vibe-kml run lock
 
 install:
 	@uv sync
 
+tools:
+	@command -v osmium >/dev/null || brew install osmium-tool
+
 test: install
 	@uv run python -m unittest discover -s tests -p 'test_*.py'
 
-circle: install
-	@mkdir -p $(OSM_DIR)
+area-poly: install
+	@mkdir -p $(RUN_DIR)
+ifdef GPX
+	@uv run python scripts/get-track-area.py \
+	--resolution $(H3_RESOLUTION) \
+	$(GPX) \
+	$(AREA_POLY) \
+	$(TRACK_CELLS) \
+	$(TRACK_GEOJSON);
+else
 	@uv run python scripts/get-circle.py \
 	$(START_LAT) \
 	$(START_LON) \
 	$(RADIUS_KM) \
-	$(CIRCLE);
+	$(AREA_POLY);
+endif
 
-area: circle
-	@osmconvert $(OSM_DIR)/$(COUNTRY_OSM_FILE) \
-		-B=$(CIRCLE) \
-		--complete-ways \
-		--complete-multipolygons \
-		-o=$(OSM_DIR)/area.osm.pbf
-	@osmium cat --overwrite $(OSM_DIR)/area.osm.pbf -o $(OSM_DIR)/area.osm
+area: tools area-poly
+	@osmium extract $(OSM_DIR)/$(COUNTRY_OSM_FILE) \
+		--polygon $(AREA_POLY) \
+		--strategy smart \
+		--overwrite \
+		-o $(RUN_DIR)/area.osm
 
 points: install area
 	@uv run python scripts/get-points.py \
-	$(START_LAT) \
-	$(START_LON) \
-	$(OSM_DIR)/area.osm \
+	$(RUN_DIR)/area.osm \
 	$(POINTS);
 
 points-normalized: install points
-	@mkdir -p $(OSM_DIR)
 	@uv run python scripts/normalize-area-points.py \
 	$(POINTS) \
 	$(POINTS_NORMALIZED);
@@ -90,9 +117,7 @@ area-points-kml: install points-normalized
 area-cells: install points-normalized
 	@uv run python scripts/build-area-cells.py \
 	--resolution $(H3_RESOLUTION) \
-	--center-lat $(START_LAT) \
-	--center-lon $(START_LON) \
-	--radius-km $(RADIUS_KM) \
+	$(CELL_FILTER_ARGS) \
 	$(POINTS_NORMALIZED) \
 	$(AREA_CELLS);
 
@@ -105,21 +130,24 @@ area-vibe: install
 
 area-vibe-kml: install
 	@uv run python scripts/build-area-vibe-kml.py \
+	--area-cells-csv $(AREA_CELLS) \
+	$(VIBE_KML_ARGS) \
 	$(AREA_VIBE) \
 	$(AREA_VIBE_KML);
 
 lock:
 	@uv lock
 
-# Entry point: full pipeline (assumes `make country` was already run once).
+# Entry point: full pipeline (assumes `make country` was already run once); add GPX=<file> for GPX mode.
 # area -> points-normalized -> area-points-kml -> area-cells -> area-vibe -> area-vibe-kml.
 run: area points-normalized area-points-kml area-cells area-vibe area-vibe-kml
 	@echo "Run complete."
 
 help:
 	@echo "install           - uv sync"
+	@echo "tools             - install osmium CLI via Homebrew if missing"
 	@echo "test              - run unit tests"
-	@echo "circle            - generate search circle polygon"
+	@echo "area-poly         - clip polygon: GPX track bbox (GPX=<file>) or circle around START_LAT/LON"
 	@echo "area              - extract OSM area"
 	@echo "points            - extract points from area"
 	@echo "points-normalized - normalize area points"
@@ -127,5 +155,5 @@ help:
 	@echo "area-cells        - build H3 cells from points"
 	@echo "area-vibe         - classify area vibe via ollama"
 	@echo "area-vibe-kml     - build KML from vibe cells"
-	@echo "run               - entry point: full pipeline (after one-time 'make country')"
+	@echo "run               - entry point: full pipeline (after one-time 'make country'); GPX=<file> for GPX mode"
 	@echo "lock              - uv lock"
